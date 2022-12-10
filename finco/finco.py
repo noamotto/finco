@@ -66,7 +66,6 @@ from scipy.integrate import solve_ivp
 import pandas as pd
 from joblib import Parallel, delayed, cpu_count
 from tqdm import tqdm
-import numba
 
 from .doprop import _do_step
 from .utils import hbar
@@ -257,36 +256,6 @@ def calc_xis(sol, Ts, gamma_f, ref_angle=None):
         ref_angle = xi_1_angle[i+1]
 
     return np.stack(xi_1_abs).T, np.stack(xi_1_angle).T
-
-
-# @numba.njit()
-# def _actual_stuff(q, p, S, M_p, M_q, t_1, V_0, V_1, V_2, m):
-#     n = q.shape[0]
-#     res = np.zeros(n * 5, dtype=q.dtype)
-#     for i in range(n):
-#         res[i] = p[i] / m * t_1[i]
-#         res[i + n] = -V_1[i] * t_1[i]
-#         res[i + 2*n] = p[i] ** 2 / 2 / m - V_0[i] * t_1[i]
-#         res[i + 3*n] = -V_2[i] * M_q[i] * t_1[i]
-#         res[i + 4*n] = M_p[i] / m * t_1[i]
-#     return res
-
-# def _do_step(tau: float, y: ArrayLike, t_trajs: TimeTrajectory, V: list, m: float):
-#     # t = t_trajs.t_0(tau)
-
-#     q, p, S, M_p, M_q = y.reshape(5, -1)
-
-#     return _actual_stuff(q, p, S, M_p, M_q, 
-#                           t_trajs.t_1(tau), V[0](q), V[1](q), V[2](q), m)
-
-# def _do_step(tau: float, y: ArrayLike, t_trajs: TimeTrajectory, V: list, m: float):
-#     # t = t_trajs.t_0(tau)
-
-#     q, p, S, M_p, M_q = y.reshape(5, -1)
-
-#     res = (np.stack((p / m, -V[1](q), p**2/2/m - V[0](q), 
-#                       -V[2](q) * M_q, M_p / m)) * t_trajs.t_1(tau))
-#     return res.flatten()
     
 def propagate_traj(ics, V, m, time_traj: TimeTrajectory, max_step, Ts, gamma_f):
     """
