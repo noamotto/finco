@@ -4,19 +4,56 @@ FINCO results handlers
 
 The FINCO algorithm produces several result datasets, that can then be used to
 analyse the propagation results and reconstruct the wavefunction. The datasets
-are retrieved as pandas DataFrames, with index as specified in create_ics()
+are retrieved as pandas DataFrames, with index as specified in create_ics().
+
+As writing new results is done solely by the propagation methods, usage of
+FINCOWriter directly in scripts is uncommon. In order to load results please
+use load_results(), or results_from_data() to wrap raw results.
+
+The loading from a results file is done lazily, meaning that data is processed
+on demand. For efficiency, one can load a portion of a results file into memory
+using get_view().
 """
 
+import os
+from typing import Union, Optional
+
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 import matplotlib.pyplot as plt
 from joblib import delayed, Parallel
-import os
 
-from .utils import gf, hbar
+from .utils import hbar
 from .mesh import Mesh
 
-def _calc_projection(results, gamma_f):
+def gf(x: ArrayLike, qf: float, pf: float, gamma_f: float) -> ArrayLike:
+    """
+    Utility function. Reconstructs a Gaussian from given parameters.
+
+    Parameters
+    ----------
+    x : 1D ArrayLike of floats
+        x positions to reconstruct the Gaussian for.
+    qf : float
+        Gaussian's center.
+    pf : float
+        Gaussian's momentum.
+    gamma_f : float
+        Gaussian width.
+
+    Returns
+    -------
+    psi : 1D Array like in the shape of x
+        The reconstructed Gaussian.
+
+    """
+    X, Qf = np.meshgrid(np.array(x), np.array(qf))
+    Pf = np.array(pf).reshape(-1, 1)
+    return (2*gamma_f / np.pi) ** 0.25 * np.exp(-gamma_f*(X-Qf)**2 + 1j / hbar * Pf * (X-Qf))
+
+def _calc_projection(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.Series,
+                                                                pd.Series, pd.Series]:
     """
     Calculates Gaussian projection on the real axis parameters.
 
@@ -24,18 +61,20 @@ def _calc_projection(results, gamma_f):
     ----------
     results : pandas.DataFrame
         Raw data to calculate from, as saved by FINCOWriter
+    gamma_f : float
+        Value of gamma_f used in propagation.
 
     Returns
     -------
-    qf : ArrayLike of float
+    qf : pandas.Series of float
         Peak location of the trajectory's Gaussian projection on
         the real axis at timestep
-    pf : ArrayLike of float
+    pf : pandas.Series of float
         Peak momentum of the trajectory's Gaussian projection on
         the real axis at timestep
-    xi : ArrayLike of complex
+    xi : pandas.Series of complex
         Trajectory's Hubber-Heller projection map at timestep
-    sigma : ArrayLike of complex
+    sigma : pandas.Series of complex
         Exponent resulting from the projection as defined in the paper
     """
     xi = 2 * gamma_f * results.q - 1j / hbar * results.p
@@ -45,7 +84,7 @@ def _calc_projection(results, gamma_f):
 
     return pd.Series(qf, index=results.index), pd.Series(pf, index=results.index), xi, sigma
 
-def _calc_derivatives(results, gamma_f):
+def _calc_derivatives(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.Series]:
     """
     Calculates derivatives of the Gaussian projection on the real axis parameters.
 
@@ -53,19 +92,21 @@ def _calc_derivatives(results, gamma_f):
     ----------
     results : pandas.DataFrame
         Raw data to calculate from, as created by create_ics()
+    gamma_f : float
+        Value of gamma_f used in propagation.
 
     Returns
     -------
-    xi_1 : ArrayLike of complex
+    xi_1 : pandas.Series of complex
         First defivative of xi w.r.t. q0
-    sigma_1 : ArrayLike of complex
+    sigma_1 : pandas.Series of complex
         First defivative of sigma w.r.t. q0
     """
     xi_1 = results.xi_1_abs * np.exp(results.xi_1_angle * 1j)
     sigma_1 = 1j / 2 / gamma_f / hbar * results.p * xi_1
     return xi_1, sigma_1
 
-def _calc_pref(results, gamma_f):
+def _calc_pref(results: pd.DataFrame, gamma_f: float) -> pd.Series:
     """
     Calculates the prefactor of trajectories, their contribution to the integral,
     at timestep
@@ -74,6 +115,8 @@ def _calc_pref(results, gamma_f):
     ----------
     results : pandas.DataFrame
         Raw data to calculate from, as saved by FINCOWriter
+    gamma_f : float
+        Value of gamma_f used in propagation.
 
     Returns
     -------
@@ -101,7 +144,7 @@ class FINCOResults:
     ----------
     file_path : string
         Path of the results file to load. Set to None in order to read from
-        provided datasets.
+        provided dataset.
     data : pandas.DataFrame
         Datasets with raw results to read from. Used only if file_path is None.
     gamma_f : float
@@ -137,7 +180,8 @@ class FINCOResults:
     file_path: str
     gamma_f: float
 
-    def __init__(self, file_path, data, gamma_f):
+    def __init__(self, file_path: Union[str, None],
+                 data: Union[pd.DataFrame, None], gamma_f: int):
         # Results
         self.file_path = file_path
         self.data = data
@@ -154,14 +198,14 @@ class FINCOResults:
                 return self.data[name]
         except Exception as E:
             raise AttributeError(name) from E
-            
+
     def __repr__(self):
         if self.file_path is not None:
             with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
                 details = file.info()
             return f"FINCO results dataset at {self.file_path}. Details:\n{details}"
-        else:
-            return f"FINCO results dataset in memory with {self.data.size} entries"
+
+        return f"FINCO results dataset in memory with {self.data.size} entries"
 
     def merge(self, other):
         """
@@ -179,7 +223,8 @@ class FINCOResults:
         else:
             self.data.append(other.get_results())
 
-    def get_results(self, start=None, end=None):
+    def get_results(self, start: Optional[int] = None,
+                    end: Optional[int] = None) -> pd.DataFrame:
         """
         Retrieves a slice of the raw results at given timesteps.
 
@@ -202,14 +247,12 @@ class FINCOResults:
                 if start is not None:
                     if end is not None:
                         dataset = file.select(key='results',
-                                           where='(timestep >= {}) & (timestep < {})'.format(start, end))
+                                           where=f'(timestep >= {start}) & (timestep < {end})')
                     else:
-                        dataset = file.select(key='results',
-                                           where='timestep >= {}'.format(start))
+                        dataset = file.select(key='results', where=f'timestep >= {start}')
                 else:
                     if end is not None:
-                        dataset = file.select(key='results',
-                                           where='timestep < {}'.format(end))
+                        dataset = file.select(key='results', where=f'timestep < {end}')
                     else:
                         dataset = file.get(key='results')
         else:
@@ -223,7 +266,8 @@ class FINCOResults:
 
         return dataset
 
-    def get_trajectories(self, start=None, end=None, threshold=-1):
+    def get_trajectories(self, start: Optional[int] = None,
+                         end: Optional[int] = None, threshold: int = -1) -> pd.DataFrame:
         """
         Retrieves the trajectory data at given timestep.
 
@@ -270,7 +314,7 @@ class FINCOResults:
                              't': results.t, 'q': results.q, 'p': results.p,
                              'pref': pref}, index=results.index)
 
-    def get_projection_map(self, step):
+    def get_projection_map(self, step: int) -> pd.DataFrame:
         """
         Calculates and returns a map of the Gaussian projection on the real
         axis, at given timestep. Used to deal with Stokes phenomena.
@@ -299,7 +343,7 @@ class FINCOResults:
         return pd.DataFrame({'q0': results.q0, 'xi': xi,
                              'sigma': sigma}, index=results.index)
 
-    def get_caustics_map(self, step):
+    def get_caustics_map(self, step: int) -> pd.DataFrame:
         """
         Calculates and returns a map used to determine where caustics are
         in the system, at given timestep. Used to deal with Stokes phenomena.
@@ -330,8 +374,8 @@ class FINCOResults:
         return pd.DataFrame({'q0': results.q0, 'xi_1': xi_1,
                              'sigma_1': sigma_1}, index=results.index)
 
-    def reconstruct_psi(self, x, step, S_F=None, threshold=-1,
-                        blocksize=2**14, n_jobs=1):
+    def reconstruct_psi(self, x: ArrayLike, step: int, S_F: Optional[pd.Series] = None,
+                        threshold: int = -1, n_jobs: int = 1) -> ArrayLike:
         """
         Reconstructs the wavefunction at given timestep
 
@@ -341,10 +385,17 @@ class FINCOResults:
             x positions to reconstruct the wavefunction for.
         step : int
             Timestep to reconstruct the wavefunction for.
+        S_F : pandas.Series, optional
+            List of Berry factors for the trajectories. If given, then the
+            prefactor of each trajectory will be multiplied with its corresponding
+            factor. The default is None.
         threshold : float, optional
             Threshold for a trajectory's contribution. If positive, the function
             throws every trajectory whose Gaussian prefactor is more than threshold.
             The default is -1.
+        n_jobs : int, optional
+            Number of parallel jobs to use for reconstruction. Dataset will be
+            divided equally between jobs. The default is 1.
 
         Returns
         -------
@@ -357,15 +408,16 @@ class FINCOResults:
                 return 0
             x, y = points.real, points.imag
             return np.abs(np.sum(x[:-1] * y[1:] - x[1:] * y[:-1]) + x[-1]*y[0] - x[0]*y[-1]) / 2
-        
+
         def process(block):
+            """Calculates the reconstruction of given block of points"""
             points, qf, pf, pref = block
             ordered = (points.groupby('point')
                        .apply(lambda x_: x_.to_numpy()[np.argsort(np.angle(x_), axis=None)]))
             areas = np.array(list(map(area, ordered)))[:, np.newaxis]
-                
+
             pref = pref.to_numpy()[:, np.newaxis]
-        
+
             return np.nansum((1 / 32 / self.gamma_f**3 / np.pi**3) ** 0.25 * pref *
                              gf(x, qf, pf, self.gamma_f) * areas / 3, axis=0)
 
@@ -386,11 +438,11 @@ class FINCOResults:
         qf.drop(mesh.tri.coplanar[:,0], inplace=True)
         pf.drop(mesh.tri.coplanar[:,0], inplace=True)
         pref.drop(mesh.tri.coplanar[:,0], inplace=True)
-        
+
         # Calculate areas for each point
         neighbors = mesh.get_neighbors_value(results.q0)
-        
-        relative = (neighbors.q0 - 
+
+        relative = (neighbors.q0 -
                     results.q0.take(neighbors.index.get_level_values('point')).to_numpy())
         blocks = np.array_split(relative.index.get_level_values('point').unique().
                                 astype(int).to_numpy(), n_jobs)
@@ -402,7 +454,8 @@ class FINCOResults:
         return np.nansum(Parallel(n_jobs=n_jobs, verbose=10)([delayed(process)(x)
                                                   for x in zip(ranges, qfs, pfs, prefs)]), axis=0)
 
-    def show_plots(self, x, y0, y1, interval, threshold=-1, skip=1):
+    def show_plots(self, x: ArrayLike, y0: float, y1: float, interval: int,
+                   threshold: float = -1, skip: int = 1):
         """
         Helper function. Does a slideshow of the reconstructed wavepackets at
         each timestep.
@@ -437,9 +490,10 @@ class FINCOResults:
                 plt.draw()
 
 
-def load_results(file_path, gamma_f=1) -> FINCOResults:
+def load_results(file_path: str, gamma_f: float = 1) -> FINCOResults:
     """
-    Loads a FINCO results file into object.
+    Loads a FINCO results file into object. Should be used instead of
+    directly calling FINCOResults.
 
     Parameters
     ----------
@@ -468,13 +522,14 @@ def load_results(file_path, gamma_f=1) -> FINCOResults:
 
 
 
-def results_from_data(data, gamma_f=1) -> FINCOResults:
+def results_from_data(data: pd.DataFrame, gamma_f: float = 1) -> FINCOResults:
     """
-    Creates a FINCO results object from dataset.
+    Creates a FINCO results object from dataset. Should be used instead of
+    directly calling FINCOResults.
 
     Parameters
     ----------
-    data : pandas DataFrame
+    data : pandas.DataFrame
         dataset of trajcetories to wrap. Should have the same form as described
         in create_ics()
     gamma_f : float, optional
@@ -489,12 +544,14 @@ def results_from_data(data, gamma_f=1) -> FINCOResults:
 
     return FINCOResults(file_path=None, data=data, gamma_f=gamma_f)
 
-def get_view(results: FINCOResults, start = None, end = None) -> FINCOResults:
+def get_view(results: FINCOResults, start: Optional[int] = None,
+             end: Optional[int] = None) -> FINCOResults:
     """
     Returns a view of a results dataset as a FINCOResults object. This is done
     by loading a subset of the results and creating a FINCOResults around it.
-    
+
     As this is a view, data in the returned object should be treated as read-only.
+    It does not change the results file.
 
     Parameters
     ----------
@@ -510,7 +567,7 @@ def get_view(results: FINCOResults, start = None, end = None) -> FINCOResults:
     view : FINCOResults
         The resulting view object
     """
-    return results_from_data(data = results.get_results(start, end), 
+    return results_from_data(data = results.get_results(start, end),
                              gamma_f = results.gamma_f)
 
 class FINCOWriter:
@@ -535,7 +592,7 @@ class FINCOWriter:
         Set to True to append. The default is False.
     """
 
-    def __init__(self, file_path, append=False):
+    def __init__(self, file_path: Optional[str], append: bool = False):
         if file_path is not None:
             mode = 'a' if append else 'w'
             self.results_file = pd.HDFStore(path=file_path, mode=mode, complevel=5)
@@ -559,16 +616,16 @@ class FINCOWriter:
 
             self.results_file.close()
 
-    def add_results(self, results):
+    def add_results(self, results: pd.DataFrame):
         """
         Adds result to the dataset, in the form of a pandas DataFrame as
         described in create_ics()
 
         Parameters
         ----------
-        results : pandas DataFrame
-            The results to add to the dataset. Should be in the form of a pandas DataFrame as
-            described in create_ics()
+        results : pandas.DataFrame
+            The results to add to the dataset. Should be in the form as described in
+            create_ics()
         """
 
         if self.results_file is not None:

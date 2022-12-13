@@ -113,7 +113,7 @@ ics = create_ics(qs, S0 = S0, gamma_f=1)
 result = propagate(ics,
                    V = V, m = m, gamma_f=1,
                    time_traj = CoulombGTimeTrajectory(n=order),
-                   dt = 1e-4, drecord=1/3000, n_jobs=1, heuristics = [])
+                   dt = 1e-4, drecord=1/3000, n_jobs=1)
 
 fig_trajs = plt.figure()
 plt.scatter([0], [0])
@@ -170,7 +170,7 @@ ics = create_ics(qs, S0 = S0, gamma_f=1)
 result = propagate(ics,
                    V = V, m = m, gamma_f=1,
                    time_traj = CoulombGTimeTrajectory(n=order, t=crash_t),
-                   dt = 1e-4, drecord=1, n_jobs=3, heuristics = [])
+                   dt = 1e-4, drecord=1, n_jobs=3)
 
 trajs = result.get_trajectories(1).sort_index()
 poles = coulombg_pole(trajs.q0, trajs.p0, 0)
@@ -255,7 +255,7 @@ jac = 1
 result = propagate(create_ics(qs, S0 = S0, gamma_f=1),
                    V = V, m = m, gamma_f=1, jac=jac,
                    time_traj=TestTimeTrajectoryFactory(alphas=alphas),
-                   dt=1e-3, drecord=1/600, heuristics=[])
+                   dt=1e-3, drecord=1/600)
 
 trajs = result.get_trajectories(start=0, end=600)
 trajs['E'] = trajs.p**2/2/m + coulombg.V_0(trajs.q)
@@ -313,7 +313,7 @@ S_F = eliminate_stokes(results_a[n], caustic)
 # ts = caustic_times(results_a[n], coulombg_caustic_times_dir, coulombg_caustic_times_dist, n_iters = 270,
 #                     skip = 27, x = x, S_F = S_F, plot_steps=True,
 #                     V = V, m = m, gamma_f=1, dt=1, 
-#                     n_jobs=n_jobs, blocksize=2**15, heuristics=[],
+#                     n_jobs=n_jobs, blocksize=2**15,
 #                     verbose=False) 
 
 #%%

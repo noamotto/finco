@@ -6,23 +6,25 @@ Tools for locating caustics in FINCO results and dealing with Stokes phenomenon.
 import logging
 import os
 import shutil
+from time import perf_counter
+from typing import Callable, List, Tuple, Optional
 
-from skimage import measure, feature, morphology
 import pandas as pd
 import numpy as np
+from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
 from scipy.optimize import root
-from utils import derivative
 from scipy.special import erf
+from utils import derivative
 from joblib import Parallel, delayed
-from time import perf_counter
 
 from .finco import propagate, create_ics, FINCOConf, continue_propagation
 from .results import FINCOResults, get_view
 from .time_traj import TimeTrajectory, LineTraj
 from .mesh import Mesh
 
-def separate_to_blobs(deriv, quantile=1e-3, connectivity=2):
+def separate_to_blobs(deriv: pd.DataFrame, quantile: float = 1e-3,
+                      connectivity: int = 2) -> List[set]:
     """
     Separates a mesh of results into blobs of possible locations of caustics.
     The process is done by taking the points whose absolute value of dxi_dq0 is
@@ -36,6 +38,12 @@ def separate_to_blobs(deriv, quantile=1e-3, connectivity=2):
         FINCOResults.get_caustics_map()
     quantile : float in [0,1], optional
         Quantile for candidate location. The default is 1e-3.
+    connectivity : positive int, optional
+        Maximal number of hops on the mesh allowed for a point to be
+        considered a neighbor. For example, connectivity of 1 considers only
+        the points connected directly to the given point as neighbors, while
+        connectivity of 2 considers the points connected to those points as
+        neighbors as well. The default is 1.
 
     Returns
     -------
@@ -56,14 +64,16 @@ def separate_to_blobs(deriv, quantile=1e-3, connectivity=2):
         while neighbors:
             blobs[-1] |= neighbors
             candidates -= neighbors
-            neighbors = candidates & set().union(*[mesh.get_neighbors(i, connectivity) for i in neighbors])
+            neighbors = (candidates &
+                         set().union(*[mesh.get_neighbors(i, connectivity) for i in neighbors]))
 
     return [list(blob) for blob in blobs]
 
-def find_caustics(qs, S0, progress=True, threshold=1e-2, **kwargs):
+def find_caustics(qs: ArrayLike, S0: ArrayLike, progress: bool = True,
+                  threshold: float = 1e-2, **kwargs) -> pd.DataFrame:
     """
-    Finds the caustics of a system given a FINCO object with the system,
-    the time trajectory of the propagation and initial guesses.
+    Finds the caustics of a system given the parameters for FINCO propagation
+    and initial guesses.
 
     The algorithm uses a root-search to find the caustics, and therefore is
     quite expensive and should not be used too sparingly.
@@ -109,13 +119,11 @@ def find_caustics(qs, S0, progress=True, threshold=1e-2, **kwargs):
     kwargs['verbose'] = False
     kwargs['trajs_path'] = None
     n_jobs = kwargs.pop('n_jobs', 1)
-    
+
     c = FINCOConf(**kwargs)
-    res = Parallel(n_jobs=n_jobs, verbose=10)([delayed(root)(run_finco, x0=(x,y)) for x, y 
-                                   in zip(np.real(qs), np.imag(qs))])
-    
-    # for x, y in tqdm(zip(np.real(qs), np.imag(qs)), total=len(qs), disable=not progress):
-    #     res.append(root(run_finco, x0=(x,y)))
+    res = Parallel(n_jobs=n_jobs, verbose=10 * progress)([delayed(root)(run_finco,
+                                                                        x0=(x,y)) for x, y
+                                                          in zip(np.real(qs), np.imag(qs))])
 
     converged = [r.success for r in res]
     roots = np.array([r.x for r in res])[converged]
@@ -135,7 +143,7 @@ def find_caustics(qs, S0, progress=True, threshold=1e-2, **kwargs):
         idx = cluster.idxmin().norm
         caustics.append(pd.DataFrame(candidates.iloc[idx]).T)
         candidates = candidates[~close].reset_index(drop=True)
-        
+
     caustics = pd.concat(caustics, ignore_index=True)
 
     # Find derivatives around caustics
@@ -155,9 +163,10 @@ def find_caustics(qs, S0, progress=True, threshold=1e-2, **kwargs):
 
     return caustics
 
-def approximate_F(q0, xi, caustic):
+def approximate_F(q0: pd.Series, xi: pd.Series,
+                  caustic: pd.Series) -> Tuple[pd.DataFrame, complex]:
     """
-    Calculates the approximation of the Stokes parameter F as described in
+    Calculates the approximation of the Stokes parameter :math:`F` as described in
     https://aip.scitation.org/doi/pdf/10.1063/1.5024467
 
     Parameters
@@ -174,8 +183,15 @@ def approximate_F(q0, xi, caustic):
 
     Returns
     -------
-    F : 2D ArrayLike of complex
-        Approximation of F corresponding to the initial positions
+    F : pandas.DataFrame
+        Approximation of :math:`F` corresponding to the initial positions. Contains the
+        same index as q0 and the following fields:
+            - F: complex
+                The approximation of `F` for each point
+            - v_t: complex
+                The calculated value of :math:`\\tilde\\nu` for each point
+    F_3 : complex
+        The calculated value of :math:`F^{(3)}`
     """
     v_t = np.stack([((xi - caustic.xi) * 2 / caustic.xi_2)**0.5,
                     -((xi - caustic.xi) * 2 / caustic.xi_2)**0.5])
@@ -184,142 +200,14 @@ def approximate_F(q0, xi, caustic):
     F_3 = caustic.sigma_3 / 3 - caustic.sigma_2 * caustic.xi_3 / 3 / caustic.xi_2
     return pd.DataFrame({'F': F_3 * v_t ** 3, 'v_t': v_t}, index = q0.index), F_3
 
-def find_stokes_sectors(grid, F, caustic):
+def calc_factor2(caustic: pd.Series, q0: pd.Series, xi: pd.Series,
+                 sigma: pd.Series) -> pd.Series:
     """
-    Locates the Stokes sectors for a specific caustic, based on image analysis
-    of F.
-
-    The function takes the sign map of the real and imaginary parts of F, and
-    using image processing tools tries to divide them into the stokes and
-    anti-stokes sectors. Not so efficient, and probably rendundant comparing
-    to using v_t.
-
-    Parameters
-    ----------
-    grid : ArrayLike of complex
-        Grid matrix of locations of the points. Is treated as having equal
-        spacing between points.
-    F : ArrayLike of complex
-        Calculation of the Stokes parameter F, as derived for example from
-        **approximate_f**.
-    caustic : Series
-        The caustic to find the sectors for. Should be of the format outputted
-        by **find_caustics**.
-
-    Returns
-    -------
-    stokes : ArrayLike of complex
-        Map of the stokes sectors, where each point's value is a sector label
-        assigned to it.
-    astokes : ArrayLike of complex
-        Map of the anti-stokes sectors, where each point's value is a sector label
-        assigned to it.
-    """
-    elem = morphology.diamond(3)
-
-    idx = np.argmin(np.abs(grid-caustic.q))
-    x0,y0  = idx//grid.shape[1], idx % grid.shape[1]
-
-    Fim = morphology.opening(morphology.closing(np.sign(F.imag)))
-    Fim[x0-3:x0+4,y0-3:y0+4] = 0
-    stokes_ = measure.label(Fim, background=0)
-    s_regions = measure.regionprops(stokes_)
-    rmins = [np.min([((x0 - x)**2 + (y0 - y)**2) for (x,y) in region.coords]) for region in s_regions]
-    order = np.argsort(rmins)
-    for label in order[6:]:
-        stokes_[stokes_ == label + 1] = 0
-
-    centers = np.array([np.array(s_regions[i].centroid) - (x0,y0) for i in order[:6]])
-    angles = -np.angle(centers[:,1] + centers[:,0]*1j)
-    newlabels = np.argsort(angles)
-    oldlabels = [s_regions[i].label for i in order[:6]]
-
-    stokes = np.zeros_like(stokes_)
-    for i in range(len(newlabels)):
-        stokes[stokes_ == oldlabels[newlabels[i]]] = i + 1
-
-    Fre = morphology.opening(morphology.closing(np.sign(F.real)))
-    Fre[x0-3:x0+4,y0-3:y0+4] = 0
-    astokes_ = measure.label(Fre, background=0)
-    a_regions = measure.regionprops(astokes_)
-    rmins = [np.min([((x0 - x)**2 + (y0 - y)**2) for (x,y) in region.coords]) for region in a_regions]
-    order = np.argsort(rmins)
-    for label in order[6:]:
-        astokes_[astokes_ == label + 1] = 0
-
-    centers = np.array([np.array(a_regions[i].centroid) - (x0,y0) for i in order[:6]])
-    angles = -np.angle(centers[:,1] + centers[:,0]*1j)
-    newlabels = np.argsort(angles)
-    oldlabels = [a_regions[i].label for i in order[:6]]
-
-    astokes = np.zeros_like(astokes_)
-    for i in range(len(newlabels)):
-        astokes[astokes_ == oldlabels[newlabels[i]]] = i + 1
-
-    return stokes, astokes
-
-def calc_factor(F, sigma, stokes, anti_stokes, grid):
-    """
-    Calculates the Barry factor given a map of stokes and anti-stokes sectors.
-
-    Parameters
-    ----------
-    F : ArrayLike of complex
-        Calculation of the Stokes parameter F, as derived for example from
-        **approximate_f**.
-    sigma : ArrayLike of complex
-        The sigma value for each point in the grid, as calculated by the FINCO
-        propagation.
-    stokes : ArrayLike of complex
-        Map of the stokes sectors, where each point's value is a sector label
-        assigned to it. Should be of the format returned by **find_stokes_sectors**
-    anti_stokes : ArrayLike of complex
-        Map of the anti-stokes sectors, where each point's value is a sector label
-        assigned to it. Should be of the format returned by **find_stokes_sectors**
-    grid : ArrayLike of complex
-        Grid matrix of locations of the points. Is treated as having equal
-        spacing between points.
-
-    Returns
-    -------
-    factor : ArrayLike of float in range [0,1]
-        Barry factor. Should be multiplied with the prefactors of each point,
-        in order to apply the treatment of Stokes phenomenon.
-
-    """
-    sigma_p = sigma > 0
-    stokes_lines = feature.canny(stokes/6*100, low_threshold=1)
-    # plt.figure(), plt.scatter(grid.real, grid.imag, c=sigma_p)
-    # plt.figure(), plt.scatter(grid.real, grid.imag, c=stokes_lines)
-
-    factor = np.ones_like(F, dtype=np.float64)
-    if len(anti_stokes[sigma_p & (anti_stokes != 0) & stokes_lines]) > 0:
-        bad_label = anti_stokes[sigma_p & (anti_stokes != 0) & stokes_lines][0]
-        bad_region = anti_stokes == bad_label
-        s_bad_labels = np.unique(stokes[bad_region])
-        fix_labels = (bad_label - 2) % 6 + 1, bad_label % 6 + 1
-        fix_regions = (anti_stokes == fix_labels[0]), (anti_stokes == fix_labels[1])
-        s_fix_labels = np.unique(stokes[fix_regions[0]]), np.unique(stokes[fix_regions[1]])
-        sign_labels = (np.intersect1d(s_bad_labels, s_fix_labels[0]),
-                       np.intersect1d(s_bad_labels, s_fix_labels[1]))
-
-        re_sign = -np.sign(F.real[bad_region])[0]
-        im_sign = [np.sign(F.imag)[stokes == sign_labels[0]][0],
-                   np.sign(F.imag)[stokes == sign_labels[1]][0]]
-        factor[fix_regions[0]] = (erf(re_sign * im_sign[0] * F.imag[fix_regions[0]] /
-                                   (re_sign * F.real[fix_regions[0]])) + 1) / 2
-        factor[fix_regions[1]] = (erf(re_sign * im_sign[1] * F.imag[fix_regions[1]] /
-                                   (re_sign * F.real[fix_regions[1]])) + 1) / 2
-        factor[bad_region] = 0
-
-    return factor
-
-def calc_factor2(caustic, q0, xi, sigma):
-    """
-    Calculates the Barry factor using v_t for a caustic, as described in
+    Calculates the Barry factor using :math:`\\tilde\\nu` for a caustic, as described in
     https://aip.scitation.org/doi/pdf/10.1063/1.5024467
 
-    The method calculates v_t using the caustic, and the xi and sigma values on
+    The method calculates :math:`\\tilde\\nu` using the caustic, and the
+    :math:`\\xi` and :math:`\\sigma` values on
     the plane, infers from it the approximation of the Stokes and anti-Stokes
     sectors, and calculates the full Barry factor. The method is very efficient,
     but might need better treatment of the time trajectories.
@@ -333,12 +221,11 @@ def calc_factor2(caustic, q0, xi, sigma):
         Series of initial positions, with index as in FINCO's results and
         create_ics()
     xi : pandas.Series of complex
-        Series of values of the projection map corresponding to the initial
+        Series of :math:`\\xi` values corresponding to the initial
         positions, with index as in FINCO's results and create_ics()
     sigma : pandas.Series of complex
-        The sigma value for each point in q0, as calculated by the FINCO
-        propagation and with index as in FINCO's results and
-        create_ics().
+        Series of :math:`\\sigma` values corresponding to the initial
+        positions, with index as in FINCO's results and create_ics()
 
     Returns
     -------
@@ -348,7 +235,7 @@ def calc_factor2(caustic, q0, xi, sigma):
 
     """
     logger = logging.getLogger('finco.calc_factor2')
-    
+
     factor = np.ones_like(xi, dtype=np.float)
     eps = np.finfo(factor.dtype).eps
 
@@ -358,10 +245,10 @@ def calc_factor2(caustic, q0, xi, sigma):
     phis = phis[(phis > -np.pi) & (phis < np.pi)]
 
     # Find the point closest in angle to a Stokes line, preferring points closer
-    # to the caustic. In addition, we restrict ourselves only to points close 
+    # to the caustic. In addition, we restrict ourselves only to points close
     # to the caustic
     divergent_mask = (np.real(sigma) > 0)
-    
+
     # Determine radius of r. If using F_4 / F_3 yields nothing, take a radius of
     # very low percentile of points.
     r = np.abs(-caustic.xi_2*2/caustic.xi_3)
@@ -370,10 +257,10 @@ def calc_factor2(caustic, q0, xi, sigma):
         return pd.Series(factor, index=q0.index)
         # r = F.v_t[divergent_mask].abs().quantile(1e-3)
     divergent_mask &= (F.v_t.abs() < r).to_numpy()
-    
+
     dists = np.angle(F.v_t[divergent_mask])[:,np.newaxis] - phis[np.newaxis,:]
     dists = np.min(np.abs(np.stack([dists - 2*np.pi, dists, dists + 2*np.pi])), axis=0)
-    candidates = [np.min(F.v_t[divergent_mask][(dists[:,i] < 1e-1)].abs()) if not 
+    candidates = [np.min(F.v_t[divergent_mask][(dists[:,i] < 1e-1)].abs()) if not
                   F.v_t[divergent_mask][(dists[:,i] < 1e-1)].empty else np.nan for
                   i in range(6)]
     if np.all(np.isnan(candidates)):
@@ -385,48 +272,50 @@ def calc_factor2(caustic, q0, xi, sigma):
     re_sign = (-1)**(n+1)
     im_sign = [(-1)**n, -(-1)**n]
 
-    bad_region = ((np.abs(np.angle(F['v_t']) - phis[angle]) < np.pi/6) |
-                  (np.abs(np.angle(F['v_t']) - phis[angle] + 2*np.pi) < np.pi/6) |
-                  (np.abs(np.angle(F['v_t']) - phis[angle] - 2*np.pi) < np.pi/6))
-    fix_regions = [((np.angle(F['v_t']) - phis[angle] > -np.pi/2) &
-                    (np.angle(F['v_t']) - phis[angle] < -np.pi/6) |
-                    ((np.angle(F['v_t']) - phis[angle] > 3*np.pi/2) &
-                     (np.angle(F['v_t']) - phis[angle] < 11*np.pi/6)) |
-                    ((np.angle(F['v_t']) - phis[angle] > -5*np.pi/2) &
-                     (np.angle(F['v_t']) - phis[angle] < -13*np.pi/6))),
-                   ((np.angle(F['v_t']) - phis[angle] < np.pi/2) &
-                    (np.angle(F['v_t']) - phis[angle] > np.pi/6)) |
-                   ((np.angle(F['v_t']) - phis[angle] < 5*np.pi/2) &
-                    (np.angle(F['v_t']) - phis[angle] > 13*np.pi/6)) |
-                   ((np.angle(F['v_t']) - phis[angle] < -3*np.pi/2) &
-                    (np.angle(F['v_t']) - phis[angle] > -11*np.pi/6))]
-    factor[fix_regions[0]] *= (erf(im_sign[0] * np.imag(F['F'])[fix_regions[0]] /
-                               ((2 * re_sign * np.real(F['F'])[fix_regions[0]])**0.5 + eps)) + 1) / 2
-    factor[fix_regions[1]] *= (erf(im_sign[1] * np.imag(F['F'])[fix_regions[1]] /
-                               ((2 * re_sign * np.real(F['F'])[fix_regions[1]])**0.5 + eps)) + 1) / 2
+    bad_region = ((np.abs(np.angle(F.v_t) - phis[angle]) < np.pi/6) |
+                  (np.abs(np.angle(F.v_t) - phis[angle] + 2*np.pi) < np.pi/6) |
+                  (np.abs(np.angle(F.v_t) - phis[angle] - 2*np.pi) < np.pi/6))
+    fix_regions = [((np.angle(F.v_t) - phis[angle] > -np.pi/2) &
+                    (np.angle(F.v_t) - phis[angle] < -np.pi/6) |
+                    ((np.angle(F.v_t) - phis[angle] > 3*np.pi/2) &
+                     (np.angle(F.v_t) - phis[angle] < 11*np.pi/6)) |
+                    ((np.angle(F.v_t) - phis[angle] > -5*np.pi/2) &
+                     (np.angle(F.v_t) - phis[angle] < -13*np.pi/6))),
+                   ((np.angle(F.v_t) - phis[angle] < np.pi/2) &
+                    (np.angle(F.v_t) - phis[angle] > np.pi/6)) |
+                   ((np.angle(F.v_t) - phis[angle] < 5*np.pi/2) &
+                    (np.angle(F.v_t) - phis[angle] > 13*np.pi/6)) |
+                   ((np.angle(F.v_t) - phis[angle] < -3*np.pi/2) &
+                    (np.angle(F.v_t) - phis[angle] > -11*np.pi/6))]
+    factor[fix_regions[0]] *= (erf(im_sign[0] * np.imag(F.F)[fix_regions[0]] /
+                               ((2 * re_sign * np.real(F.F)[fix_regions[0]])**0.5 + eps)) + 1) / 2
+    factor[fix_regions[1]] *= (erf(im_sign[1] * np.imag(F.F)[fix_regions[1]] /
+                               ((2 * re_sign * np.real(F.F)[fix_regions[1]])**0.5 + eps)) + 1) / 2
     factor[bad_region] *= 0
 
     return pd.Series(factor, index=q0.index)
 
-"""
-    Caustic time finding
-"""
+##############################
+#    Caustic time finding    #
+##############################
 
-class CausticTimeFinderTimeTraj(TimeTrajectory):     
+CausticTimeCallback = Callable[[ArrayLike, ArrayLike, ArrayLike, bool], ArrayLike]
+
+class CausticTimeFinderTimeTraj(TimeTrajectory):
     """
-    Time trajectory for caustic finding algorithm
-    
-    This class is in use mainly in the function caustic_times(). It allows one
+    Time trajectory class for caustic finding algorithm
+
+    This class is in use by the function caustic_times(). It allows one
     to set the direction and step size for the propagation, allowing a safe
     propagation trajectory for the estimation of the direction for the gradient
     descent-like algorithm.
-    
+
     This class expects two custom fields in its init() function
     - direction: The direction of the step in time for each trajectory. If given, \
         it is used instead of the user defined directions.
     - dt: The size of the step in time for each trajectory. If given and smaller \
         than the user defined step size, it is used instead.
-    
+
     Parameters
     ----------
     dir_func : function with signature (q0, p0, t0, est) -> directions.
@@ -436,13 +325,13 @@ class CausticTimeFinderTimeTraj(TimeTrajectory):
             - p0: Initial momenta of the trajectories, for current step
             - t0: Initial times of the trajectories, for current step
             - est: Whether the propagated step is used for gradient descent direction \
-                estimation or not          
+                estimation or not
         And the output should be
             - directions: Array of directions on the complex plane for each trajectory.
-            
-        The output directions should be the direction of step that will be taken 
-        when propagating in order to estimate the actual gradient descent direction. 
-        The directions should be complex numbers of norm 1, corresponding to unit 
+
+        The output directions should be the direction of step that will be taken
+        when propagating in order to estimate the actual gradient descent direction.
+        The directions should be complex numbers of norm 1, corresponding to unit
         vectors on the complex plane.
     dist_func : function with signature (q0, p0, t0, est) -> dists.
         Function for setting the size of step for each trajectory.
@@ -458,14 +347,20 @@ class CausticTimeFinderTimeTraj(TimeTrajectory):
         Whether the propagated step is used for gradient descent direction \
             estimation or not. Essentially this is just passed to the functions
     """
-    def __init__(self, dir_func, dist_func, est):
+
+    dts: ArrayLike
+    direction: ArrayLike
+    path: TimeTrajectory
+
+    def __init__(self, dir_func: CausticTimeCallback,
+                 dist_func: CausticTimeCallback, est: bool):
         self.dir_func = dir_func
         self.dist_func = dist_func
         self.est = est
 
     def init(self, ics):
         q0, p0, t0 = ics.q0.to_numpy(), ics.p0.to_numpy(), ics.t.to_numpy()
-        
+
         self.dts = self.dist_func(q0, p0, t0, self.est)
 
         if 'dt' in ics:
@@ -487,17 +382,20 @@ class CausticTimeFinderTimeTraj(TimeTrajectory):
     def t_1(self, tau):
         return self.path.t_1(tau)
 
-def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
-                  plot_steps = False, orig = None, x = None, S_F = None, **kwargs):
+def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
+                  dist_func: CausticTimeCallback, n_iters: int, skip: int = -1,
+                  plot_steps: bool = False, orig: Optional[FINCOResults]= None,
+                  x: Optional[ArrayLike] = None, S_F: Optional[pd.Series] = None,
+                  **kwargs) -> pd.Series:
     """
     Performs caustic time lookup for given trajectories in final time.
-    
+
     This is done via some sort of gradient descent on abs(xi_1) of the trajectories.
     On each iteration the trajectories are propagated for on a short complex time
     interval. The resulting xi_1 values are then used to calculate an estimatied
     direction and step size for the gradient descent, which are used for the actual
     propagation.
-    
+
     The algorithm also supports saving snapshots of the process as FINCO result
     files, as well as plotting of steps.
 
@@ -512,13 +410,13 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
             - p0: Initial momenta of the trajectories, for current step
             - t0: Initial times of the trajectories, for current step
             - est: Whether the propagated step is used for gradient descent direction \
-                estimation or not          
+                estimation :math:`\\tilde\\nu`or not
         And the output should be
             - directions: Array of directions on the complex plane for each trajectory.
-            
-        The output directions should be the direction of step that will be taken 
-        when propagating in order to estimate the actual gradient descent direction. 
-        The directions should be complex numbers of norm 1, corresponding to unit 
+
+        The output directions should be the direction of step that will be taken
+        when propagating in order to estimate the actual gradient descent direction.
+        The directions should be complex numbers of norm 1, corresponding to unit
         vectors on the complex plane.
     dist_func : function with signature (q0, p0, t0, est) -> dists.
         Function for setting the size of step for each trajectory.
@@ -544,7 +442,7 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
         wavepacket from every step is shown at the end. The default is False.
     orig : FINCOResults, optional
         A FINCO results dataset containing the original final time of the trajectories.
-        Can be used if one wants to continue the algorithm, and reconstruct the 
+        Can be used if one wants to continue the algorithm, and reconstruct the
         wavefunction using a different dataset. If None results is taken. The default
         is None.
     x : ArrayLike of float, optional
@@ -563,16 +461,16 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
         The final time of each trajectory at the end of the algorithm's run.
 
     """
-    
+
     logger = logging.getLogger('finco.caustic_times')
-    
+
     if skip > 0:
         step_dir = result.file_path
         if not step_dir:
-            logger.warn("""Got results from memory. Writing intermediate steps 
-                        to caustic_times.steps folder""")
+            logger.warning("""Got results from memory. Writing intermediate steps
+                           to caustic_times.steps folder""")
             step_dir = 'caustic_times'
-            
+
         step_dir += '.ct_steps'
 
         try:
@@ -580,9 +478,9 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
         except FileExistsError:
             logger.warning('Directory %s already exists. Overwriting intermediate files',
                            step_dir)
-            
+
         shutil.copy(result.file_path, os.path.join(step_dir, 'step_0.hdf'))
-        
+
         if plot_steps:
             # Keep a view to the starting point for wavefunction reconstruction
             if orig is None:
@@ -590,40 +488,40 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
             else:
                 orig = get_view(orig, 1)
             n_jobs = kwargs.get('n_jobs', 1)
-        
+
             if x is None:
                 logger.info("""No x values were given for wavfunction recunstruction. \
                             Not reconstructing wavefunction""")
-                
+
             if S_F is None:
                 logger.info("No inital Barry factor was given for step plotting. \
                             Using imaginary component of time as factor")
-                        
+
             psis = [orig.reconstruct_psi(x, 1, S_F, n_jobs=n_jobs)]
-        
+
     lr = 0.1
     est_t_traj = CausticTimeFinderTimeTraj(dir_func, dist_func, True)
     run_t_traj = CausticTimeFinderTimeTraj(dir_func, dist_func, False)
 
     if 'blocksize' not in kwargs:
         kwargs['blocksize'] = 2**15
-    
+
     for i in range(n_iters):
         logger.info('Beginning iteration %d/%d', i+1, n_iters)
         begin = perf_counter()
 
         logger.debug('Running first propagation')
-        
+
         kwargs.update({'trajs_path': None,
                        'time_traj': est_t_traj,
                        'drecord': 1/3})
         est = continue_propagation(result, **kwargs)
-        
-        logger.debug('Calculating propagation direction')   
-        
+
+        logger.debug('Calculating propagation direction')
+
         xi_1p = np.stack([est.get_caustics_map(i).xi_1 for i in range(4)])
         est_dir = (est.t.loc[:,1,:] - est.t.loc[:,0,:]).to_numpy()
-        
+
         del est
         xi_1_dot = ((1/3 * xi_1p[3] - 1.5 * xi_1p[2] + 3*xi_1p[1] - 11/6 * xi_1p[0]) /
                     np.abs(est_dir))
@@ -633,18 +531,18 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
         ics = result.get_results(1)
         ics['direction'] = theta
         ics['dt'] = np.abs(xi_1p[0]) / np.abs(xi_1_dot) * lr
-        
+
         kwargs.update({'trajs_path': os.path.join(step_dir, 'last_step.hdf'),
                        'time_traj': run_t_traj,
                        'drecord': 1})
         result = propagate(ics, **kwargs)
-        
-        logger.debug('Dxi_1: %e', (result.get_caustics_map(0).xi_1.abs().sum() - 
+
+        logger.debug('Dxi_1: %e', (result.get_caustics_map(0).xi_1.abs().sum() -
                                    result.get_caustics_map(1).xi_1.abs().sum()))
 
         if skip > 0 and (i + 1) % skip == 0:
             view = get_view(result, 1)
-            
+
             if plot_steps:
                 a = (np.abs(view.get_caustics_map(1).xi_1) -
                      np.abs(xi_1p[0])).to_numpy()
@@ -652,15 +550,16 @@ def caustic_times(result: FINCOResults, dir_func, dist_func, n_iters, skip = -1,
                 _, [diff, times] = plt.subplots(1,2)
                 diff.tripcolor(np.real(ics.q0), np.imag(ics.q0), np.sign(a))
                 times.tripcolor(np.real(ics.q0), np.imag(ics.q0), np.sign(b))
-    
+
                 ts = np.imag(view.get_trajectories(1).t)
                 factor = S_F*np.sign(ts) if S_F is not None else ts > 0
                 psis.append(orig.reconstruct_psi(x,1,S_F=factor, n_jobs=n_jobs))
-            
+
             shutil.copy(result.file_path, os.path.join(step_dir, f'step_{i+1}.hdf'))
-        
+
         end = perf_counter()
-        logger.info(f'Finished iteration {i+1}/{n_iters}. Time: {end - begin}s')
+        logger.info('Finished iteration %d/%d. Time: %fs',
+                    i + 1, n_iters, end - begin)
 
     if skip > 0 and plot_steps:
         plt.figure()

@@ -29,7 +29,7 @@ def main():
     caustic_times(result, coulombg_caustic_times_dir, coulombg_caustic_times_dist, n_iters = 900,
                   skip = 90, plot_steps=False,
                   V = V, m = m, gamma_f=1, dt=1, 
-                  n_jobs=n_jobs, blocksize=2**15, heuristics=[],
+                  n_jobs=n_jobs, blocksize=2**15,
                   verbose=False)
 
 if __name__ == "__main__":

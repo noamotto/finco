@@ -62,7 +62,6 @@ psi2 = res2.reconstruct_psi(x, 1, S_F2 * (np.imag(ts2) > 0) * mask2, n_jobs=n_jo
 psi3 = res3.reconstruct_psi(x, 1, S_F3 * (np.imag(ts3) > 0) * mask3, n_jobs=n_jobs)
 
 plt.figure('1.5cycle')
-# plt.clf()
 plt.plot(x, np.real(y), c=plt.cm.tab10(0))
 plt.plot(x, np.imag(y), ':', c=plt.cm.tab10(0))
 plt.plot(x, np.real(psi1+psi2+psi3), c=plt.cm.tab10(1))

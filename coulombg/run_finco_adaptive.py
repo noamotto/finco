@@ -29,16 +29,13 @@ def main():
                         help="Results directory")
     args = parser.parse_args()
     
-    n_iters = 7
+    n_iters = 20
     n_steps = 1
-    sub_tol = (2e-1, 1e3)
-    conv_E = 1e-2
-    conv_N = 5
+    sub_tol = (1e-2, 1e3)
     X, Y = np.meshgrid(np.linspace(1e-10, 15, 150), np.linspace(-15, 15, 300))
     
     adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = S0,
-                      n_iters = n_iters, sub_tol = sub_tol,
-                      conv_E = conv_E, conv_N = conv_N, plot_steps=True,
+                      n_iters = n_iters, sub_tol = sub_tol, plot_steps=True,
                       filter_func = lambda q: np.abs(q) > 0.01,
                       V = V, m = m, gamma_f = 1,
                       time_traj = CoulombGTimeTrajectory(n=args.n, t=halfcycle*2*args.t),

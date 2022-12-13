@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug 23 18:27:58 2022
+Script for building Python extension performing propagation
 
-@author: Owner
+Should run using:
+> python setup.py build_ext --inplace
 """
 
 from setuptools import setup, Extension

@@ -108,15 +108,11 @@ logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.DEBUG)
 n_iters = 20
 n_steps = 1
-sub_tol = 1e-1
-conv_E = 1e-2
-conv_N = 5
-temps = np.ones(n_iters)
+sub_tol = (1e-2,1e3)
 
 X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 51), np.linspace(-2.5, 2.5, 51))
 result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2],
-                                 n_iters = n_iters, sub_tol = sub_tol,
-                                 conv_E = conv_E, conv_N = conv_N, plot_steps=True,
+                                 n_iters = n_iters, sub_tol = sub_tol, plot_steps=True,
                                  V = [V_0, V_1, V_2], m = m, gamma_f = 1,
                                  time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1 / n_steps, 
                                  n_jobs=3)
@@ -134,24 +130,6 @@ def update(frame):
 ani = FuncAnimation(fig, update, frames = np.arange(0, 10, 5),
                     interval = 200, blit=True, repeat=False)
 
-
-#%% Caustics finder
-    
-# Find caustics
-X, Y = np.meshgrid(np.linspace(0, 1, 4), np.linspace(-3, 3, 6))
-qs = (X+1j*Y).flatten()
-n = 0
-
-caustics = find_caustics(qs, V = [V_0, V_1, V_2], m = m, 
-                         S0 = [S0_0, S0_1, S0_2], time_traj=QuarticTimeTrajectory())
-
-# Load projection map, add missing points, map to a grid, and calculate F
-caustics_map = load_results('trajs.hdf', gamma_f=1).get_projection_map(1)
-
-caustics_map = caustics_map.sort_values(by='q0')
-grid = np.fliplr(np.reshape(caustics_map.q0.to_numpy(), (121, 121))).T
-xi = np.fliplr(np.reshape(caustics_map.xi.to_numpy(), (121, 121))).T
-sigma = np.fliplr(np.reshape(caustics_map.sigma.to_numpy(), (121, 121))).T
 
 #%%
 trajs = load_results('trajs.hdf', gamma_f=1).get_trajectories(1)
@@ -195,7 +173,7 @@ trajs4 = results3.get_trajectories(1)
 S_F1 = eliminate_stokes(results1)
 S_F2 = eliminate_stokes(results3)
 
-#%% Caustic times?
+#%% Caustic times
 import logging
 logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.DEBUG)
@@ -209,5 +187,5 @@ def quartic_caustic_times_dir(q0 ,p0 ,t0, est):
 ts = caustic_times(result, quartic_caustic_times_dir, quartic_caustic_times_dist, n_iters = 180,
                    skip = 18, x = x, plot_steps=True,
                    V = [V_0, V_1, V_2], m = m, gamma_f=1, dt=1, drecord=1, 
-                   n_jobs=3, blocksize=2**15, heuristics=[],
+                   n_jobs=3, blocksize=2**15,
                    verbose=False) 

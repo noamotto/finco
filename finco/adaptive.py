@@ -1,29 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-The main module in FINCO. Contains an implementation of the FINCO propagation
-algorithm.
+FINCO with adaptive sampling
 
-The core feature of this algorithm is the ability to propagate a wavepacket
-in time using semi-classical trajectories. The computation employs two types
-of parallelization, by working in vectorized fashion on a set of trajectories
-and an by allowing propagation using concurrent workers.
+This module implements FINCO propagation of a system with adaptive sampling
+of the phase space.
 
-The object supports this propagation, as well as saving the results for
-analysis and wavepacket reconstruction in a persistent file. It also
-supports applying heuristics to the trajectories, in order to determine
-problematic trajectories and discard them, through the 'heuristics' parameter.
+The sampling is an iterative process, starting with building a mesh from the
+initial sample given to the algorithm. The algorithm propagates the sampled
+trajectories, then goes over the edges on the mesh, subsampling those fitting
+the given threshold. The algorithm then propagates the newly sampled points, to
+determine whether a branch cut occoured in the system, and adds the new point
+with oversampling the branch cut. Then the algorithm considers the newly added
+edges, repeating the same process.
 
-In addition, the algorithm supports custom trajectories in time. The
-algorithm propagates the system in time using a parametrized trajectory,
-with parameter tau in range [0,1), and uses a provided time function t(tau)
-and its first derivative (via the 't' parameter) to allow custom trajectories.
-
+The implementation supports different thresholds, as well as additional filtering
+and plotting of intermediate steps. The algorithm stops after a given number of
+steps has passed or no new points were added. The algorithm also saves snapshots
+at each step, along with the new candidates to add at each step, for further analysis.
 """
 
 import logging
 import os
 import shutil
-from typing import Tuple, Union, Callable
+from typing import Tuple, Union, Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -45,10 +44,10 @@ def _calc_E(u: pd.DataFrame, v: pd.DataFrame):
     Parameters
     ----------
     u : pandas.DataFrame
-        Dataset of first points. Should contain the points' position in space 
+        Dataset of first points. Should contain the points' position in space
         and their xi_1 value
     v : pandas.DataFrame
-        Dataset of second points. Should contain the points' position in space 
+        Dataset of second points. Should contain the points' position in space
         and their xi_1 value
 
     Returns
@@ -59,19 +58,18 @@ def _calc_E(u: pd.DataFrame, v: pd.DataFrame):
     """
     u_pref = u.pref.to_numpy()
     v_pref = v.pref.to_numpy()
-    # return np.abs((u.xi_1.to_numpy() - v.xi_1.to_numpy()) /
-    #               (u.q0.to_numpy() - v.q0.to_numpy()))
-    # / (u_pref + v_pref)
+
     return (np.abs((u_pref - v_pref) / (u_pref + v_pref)) *
-            ((np.abs(u_pref) > 1e-6) | (np.abs(v_pref) > 1e-6)))
+            ((np.abs(u_pref) > 1e-6) | (np.abs(v_pref) > 1e-6)) *
+            np.abs(u.q0.to_numpy() - v.q0.to_numpy()))
 
 def _calc_branchcut_est(u: pd.DataFrame, v: pd.DataFrame, w: pd.DataFrame):
     """
     Calculates estimator for the apperance of a branchcut. The smaller the value,
     the more likely a branchcut exists.
-    
+
     The estimator calculates the first derivative of xi_1 in space using 2-point
-    approximation and 3-point approximation using forward finite difference. 
+    approximation and 3-point approximation using forward finite difference.
     It is expected that if two points are from both sides of the branchcut, then
     the point in the middle between them will be in one of the sides, resulting
     in a new point very close to one of the points, and an approximation that is
@@ -80,10 +78,10 @@ def _calc_branchcut_est(u: pd.DataFrame, v: pd.DataFrame, w: pd.DataFrame):
     Parameters
     ----------
     u : pandas.DataFrame
-        Dataset of first points. Should contain the points' position in space 
+        Dataset of first points. Should contain the points' position in space
         and their xi_1 value
     v : pandas.DataFrame
-        Dataset of second points. Should contain the points' position in space 
+        Dataset of second points. Should contain the points' position in space
         and their xi_1 value
     w : pandas.DataFrame
         Dataset of middle points. Should contain the points' xi_1 value
@@ -94,9 +92,6 @@ def _calc_branchcut_est(u: pd.DataFrame, v: pd.DataFrame, w: pd.DataFrame):
         The estimator for each triplet of points.
 
     """
-    # u_xi_1, w_xi_1, v_xi_1 = u.xi_1.to_numpy(), w.xi_1.to_numpy(), v.xi_1.to_numpy()
-    # ratio = (-0.5*u_xi_1 + 0.5*v_xi_1) / (-1.5*u_xi_1 + 2*w_xi_1 - 0.5*v_xi_1)
-    # return np.abs(-1 - ratio)
     return np.max([_calc_E(u, w)/_calc_E(w, v), _calc_E(w, v)/_calc_E(u, w)], axis=0)
 
 def _plot_step(mesh: Mesh, deriv: pd.DataFrame, candidate_inds: pd.DataFrame):
@@ -133,7 +128,7 @@ def _plot_step(mesh: Mesh, deriv: pd.DataFrame, candidate_inds: pd.DataFrame):
     plt.plot(np.real(ignored.q), np.imag(ignored.q), 'o', c='orange', ms=2, zorder=1e3)
     plt.plot(np.real(added.q), np.imag(added.q), 'o', c='r', ms=2, zorder=1e3)
 
-def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: ArrayLike = None):
+def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: Optional[ArrayLike] = None):
     """
     Returns a list of candidates for subsampling from points dataset and indices
 
@@ -166,8 +161,7 @@ def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: ArrayLike = None):
 
 def adaptive_sampling(qs, S0: list, n_iters: int,
                       sub_tol: Union[float, Tuple[float, float]],
-                      conv_E: float, conv_N: float,
-                      filter_func: Union[Callable[[ArrayLike], ArrayLike], None] = None,
+                      filter_func: Optional[Callable[[ArrayLike], ArrayLike]] = None,
                       plot_steps: bool = False, **kwargs) -> FINCOResults:
     """
     Performs FINCO propagation with adaptive sampling of the initial conditions.
@@ -193,10 +187,6 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
         Lower and Upper tolerance thresholds for subsampling. If one number is
         given, it is treated as lower limit for subsampling, and the upper limit
         is set to the logarithm of 1/epsilon.
-    conv_E : float
-        DESCRIPTION.
-    conv_N : float
-        DESCRIPTION.
     plot_steps : bool, optional
         Whether to generate a plot with the result of the last step. The plot's
         description is documented at _plot_step()
@@ -228,9 +218,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
         sub_tol = (sub_tol, np.inf)
 
     c = FINCOConf(**kwargs)
-    T = -np.log(np.finfo(float).eps) / sub_tol[1]
     n_steps = int(1/c.drecord)
-    conv_n = 0
 
     # Create step folder for intermediate results
     step_dir = c.trajs_path + '.steps'
@@ -262,7 +250,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
         u = deriv.take(candidate_inds.index.get_level_values(1))
         v = deriv.take(candidate_inds.index.get_level_values(0))
         E = _calc_E(u, v)
-        
+
         to_subsample = (E > sub_tol[0]) & (E < sub_tol[1])
         candidate_inds = candidate_inds[to_subsample]
         u = u[to_subsample]
@@ -297,32 +285,21 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
 
             candidate_inds['subsampled'] = to_subsample
             candidate_inds['added'] = inds_to_add
-            candidate_inds.to_hdf(os.path.join(step_dir, "step_{}_candidates.hdf".format(i+1)),
+            candidate_inds.to_hdf(os.path.join(step_dir, f"step_{i+1}_candidates.hdf"),
                                   'candidates')
 
             # Plot current step results and add new points
             if not toadd.empty:
-                logger.info('Step %d added %d points',
-                            i+1, len(toadd) / (n_steps + 1))
+                logger.info('Step %d added %d points', i+1, len(toadd) / (n_steps + 1))
                 new_indices, toadd = mesh.add_points(toadd)
                 result.merge(results_from_data(toadd, c.gamma_f))
-                shutil.copy(c.trajs_path, os.path.join(step_dir, "step_{}.hdf".format(i+1)))
+                shutil.copy(c.trajs_path, os.path.join(step_dir, f"step_{i+1}.hdf"))
             else:
                 new_indices = {}
                 logger.info('Step %d added no points', i+1)
 
             if plot_steps:
                 _plot_step(mesh, deriv, candidate_inds)
-
-            # Check convergence
-            if np.abs(np.sum(dE[inds_to_add])) < conv_E:
-                conv_n += 1
-            else:
-                conv_n = 0
-
-            if conv_n == conv_N:
-                logger.info('Adaptive sampling converged. Stopping')
-                break
 
             # Prepare next iteration candidates
             new_qs = result.get_results(0,1).q

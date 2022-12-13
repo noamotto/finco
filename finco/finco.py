@@ -9,9 +9,7 @@ of parallelization, by working in vectorized fashion on a set of trajectories
 and an by allowing propagation using concurrent workers.
 
 The object supports this propagation, as well as saving the results for
-analysis and wavepacket reconstruction in a persistent file. It also
-supports applying heuristics to the trajectories, in order to determine
-problematic trajectories and discard them, through the 'heuristics' parameter.
+analysis and wavepacket reconstruction in a persistent file.
 
 In addition, the algorithm supports custom trajectories in time. The
 algorithm propagates the system in time using a parametrized trajectory,
@@ -35,13 +33,9 @@ All the FINCO propagation functions share the same parameters, given here:
         Maximal step on the the parameterized time trajectoy for the propagator to take
     drecord : float in range of (0,1)
         Delta between snapshot taking time, in the time trajectory parameterization.
-        
+
     Optional Parameters
     -------------------
-    heuristics : ArrayLike of Heuristic objects
-        List of Heuristics to apply on each propagated trajectory, in order
-        to throw invalid trajectories.
-        The default is None.
     blocksize : int
         Number of trajectories to process in parallel. The default is 1024.
     n_jobs : int
@@ -59,6 +53,7 @@ All the FINCO propagation functions share the same parameters, given here:
 """
 
 import logging
+from typing import Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -72,7 +67,8 @@ from .utils import hbar
 from .results import FINCOResults, FINCOWriter, load_results, results_from_data
 from .time_traj import TimeTrajectory
 
-def create_ics(q0, S0, gamma_f = 1, t0 = None):
+def create_ics(q0: ArrayLike, S0: ArrayLike, gamma_f: float = 1,
+               t0: Optional[ArrayLike] = None):
     """
     Creates a set of initial trajectory states for FINCO
 
@@ -129,34 +125,33 @@ def create_ics(q0, S0, gamma_f = 1, t0 = None):
 
 class FINCOConf:
     """
-    Wrapper class for the configuration of FINCO. 
-    
+    Wrapper class for the configuration of FINCO.
+
     The class manages the default values for optional parameters, makes sure all
-    required arguments were provided and no unknown arguments were passed, 
+    required arguments were provided and no unknown arguments were passed,
     and allows simple value retrieval as attributes from the kwargs dictionary.
     """
     def __init__(self, **kwargs):
         required_args = ['V', 'm', 'gamma_f', 'time_traj', 'dt', 'drecord']
-        optional_args = ['heuristics', 'blocksize', 'n_jobs', 'trajs_path',
+        optional_args = ['blocksize', 'n_jobs', 'trajs_path',
                          'append', 'verbose']
-        
+
         # Make sure all required args are there
         for arg in required_args:
             if arg not in kwargs:
-                raise ValueError('Configuration missing required argument {}'.format(arg))
-                
+                raise ValueError(f'Configuration missing required argument {arg}')
+
         # Make sure no unknown args are there
         for arg in kwargs:
             if arg not in required_args + optional_args:
-                raise ValueError('Configuration got unknown argument {}'.format(arg))
-        
-        
+                raise ValueError(f'Configuration got unknown argument {arg}')
+
+
         self._args = {'blocksize': 1024,
                       'n_jobs': 1,
                       'trajs_path': 'trajs.hdf',
                       'append': False,
-                      'verbose': True,
-                      'heuristics': None}
+                      'verbose': True}
         self._args.update(kwargs)
 
     def __repr__(self):
@@ -169,15 +164,17 @@ class FINCOConf:
     def __getattr__(self, name):
         """Convenience value retrieval from the dictionary as attribute"""
         return self._args[name]
-    
+
     def __getstate__(self):
         return self.__dict__
- 
+
     def __setstate__(self, d):
         self.__dict__ = d
-    
 
-def calc_xi_1(sol, t_0, t_1, gamma_f, ref_angle=None):
+
+def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
+              ref_angle: Optional[ArrayLike] = None) -> [ArrayLike, ArrayLike,
+                                                         ArrayLike, ArrayLike]:
     """
     Calculates the norm and angle of xi_1 over the time parameter range
     (t0, t1) using a functional solution, assuring a smooth angle.
@@ -219,7 +216,8 @@ def calc_xi_1(sol, t_0, t_1, gamma_f, ref_angle=None):
 
     return xi_1_abs[:,0], xi_1_abs[:,-1], xi_1_angle[:,0], xi_1_angle[:,-1]
 
-def calc_xis(sol, Ts, gamma_f, ref_angle=None):
+def calc_xis(sol, Ts: ArrayLike, gamma_f: float,
+             ref_angle: Optional[ArrayLike] = None) -> [ArrayLike, ArrayLike]:
     """
     Calculates the norm and angle of xi_1 at sampled times Ts using a
     functional solution, assuring a smooth angle.
@@ -256,8 +254,10 @@ def calc_xis(sol, Ts, gamma_f, ref_angle=None):
         ref_angle = xi_1_angle[i+1]
 
     return np.stack(xi_1_abs).T, np.stack(xi_1_angle).T
-    
-def propagate_traj(ics, V, m, time_traj: TimeTrajectory, max_step, Ts, gamma_f):
+
+def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
+                   time_traj: TimeTrajectory, max_step: float, Ts: ArrayLike,
+                   gamma_f: float) -> ArrayLike:
     """
     Propagates a block of intial states in time in the system. The function
     does the propagation and returns the results.
@@ -282,6 +282,8 @@ def propagate_traj(ics, V, m, time_traj: TimeTrajectory, max_step, Ts, gamma_f):
     Ts : ArrayLike of floats in range of (0,1)
         Increasing sequence of times to take a trajectory snapshot, in the
         time trajectory parameterization.
+    gamma_f : float
+        Gaussian width for the Gaussians sampled for wavepacket reconstruction.
 
     Returns
     -------
@@ -339,12 +341,18 @@ def propagate_traj(ics, V, m, time_traj: TimeTrajectory, max_step, Ts, gamma_f):
 
     return np.concatenate(results, axis=2).reshape(7, -1)
 
-def propagate(ics, **kwargs) -> FINCOResults:
+def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     """
     Propagates the system in time, given a set of initial conditions.
     Currently assumes the propagation starts at t=0.
-    
+
     Parameter list is specified at the module documentation
+
+    Parameters
+    ----------
+    ics : pandas.DataFrame
+        Initial trajectory states dataset. Should contain at least the fields
+        created by create_ics()
 
     Returns
     -------
@@ -355,6 +363,7 @@ def propagate(ics, **kwargs) -> FINCOResults:
         return propagate_traj(block, conf.V, conf.m, time_traj=conf.time_traj,
                               max_step=conf.dt, Ts=Ts, gamma_f=conf.gamma_f)
 
+    logger = logging.getLogger('finco.propagation')
     conf = FINCOConf(**kwargs)
     Ts = np.arange(0, 1+conf.drecord/2, conf.drecord)
 
@@ -362,6 +371,9 @@ def propagate(ics, **kwargs) -> FINCOResults:
     n_jobs = conf.n_jobs if conf.n_jobs > 0 else cpu_count() + 1 + conf.n_jobs
     nslices = int(np.ceil(ics.q.size / conf.blocksize / n_jobs))
     slices = np.array_split(ics, nslices)
+
+    logger.debug("Starting propagation of %d trajectories in %d slices",
+                len(ics), nslices)
 
     with FINCOWriter(file_path=conf.trajs_path, append=conf.append) as file:
         with Parallel(n_jobs=n_jobs) as parallel:
@@ -399,7 +411,7 @@ def propagate(ics, **kwargs) -> FINCOResults:
 
         return results_from_data(file.data, conf.gamma_f)
 
-def continue_propagation(results, **kwargs) -> FINCOResults:
+def continue_propagation(results: FINCOResults, **kwargs) -> FINCOResults:
     """
     Convenience function. Continues a propagation of system in time, given a
     FINCO results object, by using its last timestep as initial trajectory state.

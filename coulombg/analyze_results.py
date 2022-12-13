@@ -52,7 +52,7 @@ for i, (result_a, result_g) in enumerate(zip(results_a, results_g)):
     # ts[i] = caustic_times(result_a, coulombg_caustic_times_dir, coulombg_caustic_times_dist, n_iters = 180,
     #                       skip = 18, plot_steps=False,
     #                       V = [V_0, V_1, V_2], m = m, gamma_f=1, dt=1, drecord=1, 
-    #                       n_jobs=n_jobs, blocksize=2**15, heuristics=[],
+    #                       n_jobs=n_jobs, blocksize=2**15,
     #                       verbose=False)
 
 #%% Wavepacket reconstruction
