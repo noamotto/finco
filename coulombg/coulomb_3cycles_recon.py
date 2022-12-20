@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Analyzes and produces a wavefunction reconstruction of Coulomb ground state
+after 3 cycles, and produces a figure comparing it to the analytical solution.
 
-This is a temporary script file.
+To produce the data needed for the reconstruction run the following:
+> python ./run_finco_adaptive.py -t 3 -o res_adaptive_0_15_15_15_t_3 4
+> python ./run_finco_adaptive.py -t 3 -o res_adaptive_0_15_15_15_t_3 5
+> python ./run_finco_adaptive.py -t 3 -o res_adaptive_0_15_15_15_t_3 6
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_3/coulombg_4.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_3/coulombg_5.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_3/coulombg_6.hdf
 """
 
 #%% Setup
@@ -23,28 +30,28 @@ T = halfcycle*2*3
 x = np.arange(-12, 12, 1e-1)
 y = 2**0.5*x*np.exp(-np.abs(x) -0.5*1j*T)
 
-res4 = load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_4.hdf')
-res5 = load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_5.hdf')
-res6 = load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_6.hdf')
+res4 = load_results('res_adaptive_0_15_15_15_t_3/coulombg_4.hdf')
+res5 = load_results('res_adaptive_0_15_15_15_t_3/coulombg_5.hdf')
+res6 = load_results('res_adaptive_0_15_15_15_t_3/coulombg_6.hdf')
     
 #%% Stokes treatment
 logger.info('Starting treating Stokes')
 
 logger.info('Dealing with order 4')
 caustics4 = locate_caustics(res4, 4, T, n_jobs=n_jobs)
-ts4 = (load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_4.hdf.ct_steps/last_step.hdf').
+ts4 = (load_results('res_adaptive_0_15_15_15_t_3/coulombg_4.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F4 = eliminate_stokes(res4, caustics4)
 
 logger.info('Dealing with order 5')
 caustics5 = locate_caustics(res5, 5, T, n_jobs=n_jobs)
-ts5 = (load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_5.hdf.ct_steps/last_step.hdf').
+ts5 = (load_results('res_adaptive_0_15_15_15_t_3/coulombg_5.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F5 = eliminate_stokes(res5, caustics5)
 
 logger.info('Dealing with order 6')
 caustics6 = locate_caustics(res6, 6, T, n_jobs=n_jobs)
-ts6 = (load_results('res_adaptive_d_0_15_15_15_t_3/coulombg_6.hdf.ct_steps/last_step.hdf').
+ts6 = (load_results('res_adaptive_0_15_15_15_t_3/coulombg_6.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F6 = eliminate_stokes(res6, caustics6)
 

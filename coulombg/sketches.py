@@ -182,32 +182,35 @@ plt.figure(), plt.scatter(np.real(trajs.q0), np.imag(trajs.q0), c=probs.apply(la
 
 #%% Image of the time space
 class TestTimeTrajectory(TimeTrajectory):
-
-    def __init__(self, q0, p0, alpha):
+    def __init__(self, alphas):
+        self.alphas = alphas
+        
+    def init(self, ics):
+        q0, p0 = ics.q0.to_numpy(), ics.p0.to_numpy()
         diff = coulombg_diff(q0, p0)
         r_dir = -np.sign(diff)
-        self.a = np.array(coulombg_pole(q0, p0, n=0)*(1-alpha) + 
-                          coulombg_pole(q0, p0, n=1)*alpha)
+        self.a = np.array(coulombg_pole(q0, p0, n=0) * (1 - self.alphas) + 
+                          coulombg_pole(q0, p0, n=1) * self.alphas)
         self.r = np.array(-diff * r_dir / 2)
 
-        # self.a += self.r * -2
-        self.a[self.a.real < 0] += self.r[self.a.real < 0] * 0
-        # self.a[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] += self.r[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] *2
-        self.r *= alpha*2
-        self.alpha = alpha
+        self.r *= self.alphas * 2
 
         # Init path
         self.path = [LineTraj(t0=0, t1=0.05, a=0, b=self.a),
                       CircleTraj(t0=0.05, t1=0.1, a=self.a, r=self.r, turns=-0.25, phi0=-np.pi),
                       CircleTraj(t0=0.1, t1=0.5, a=self.a + (1+1j)*self.r, r=self.r, turns=-1, phi0=1*np.pi/2),
-                      LineTraj(t0=0.5, t1=0.6, a=self.a + (1+1j)*self.r, b=self.a + (1+1j + 1/alpha)*self.r),
-                      CircleTraj(t0=0.6, t1=1, a=self.a + (1+1j + 1/alpha)*self.r, r=self.r, turns=-1, phi0=1*np.pi/2)]
+                      LineTraj(t0=0.5, t1=0.6, a=self.a + (1+1j)*self.r, 
+                               b=self.a + (1+1j + 1 / self.alphas)*self.r),
+                      CircleTraj(t0=0.6, t1=1, a=self.a + (1+1j + 1 / self.alphas)*self.r,
+                                 r=self.r, turns=-1, phi0=1*np.pi/2)]
 
         # self.path = [LineTraj(t0=0, t1=0.05, a=0, b=self.a),
         #              LineTraj(t0=0.05, t1=0.1, a=self.a, b=self.a + 0.1 * self.r),
         #              LineTraj(t0=0.1, t1=0.5, a=self.a + 0.1 * self.r, b=self.a + 0.5 * self.r),
         #              LineTraj(t0=0.5, t1=0.6, a=self.a + 0.5 * self.r, b=self.a + 0.6 * self.r),
         #              LineTraj(t0=0.6, t1=1, a=self.a + 0.6 * self.r, b=self.a + 1 * self.r)]
+        
+        return self
 
     def t_0(self, tau):
         if tau > 0.6:
@@ -234,34 +237,25 @@ class TestTimeTrajectory(TimeTrajectory):
         else:
             path = 0
         return self.path[path].t_1(tau)
-
-class TestTimeTrajectoryFactory:
-    def __init__(self, alphas):
-        self.alphas = alphas
-
-    def __call__(self, q0, p0):
-        return TestTimeTrajectory(q0, p0, self.alphas)
-
+    
     def get_discontinuity_times(self):
         return [0.05, 0.1, 0.5, 0.6]
 
 N = 100
-q = -0.5+3j
+q = 1+1j
 qs = np.full(N, q)
 alphas = np.linspace(0.99, 0.01, N)
 
-jac = 1
-
-result = propagate(create_ics(qs, S0 = S0, gamma_f=1),
-                   V = V, m = m, gamma_f=1, jac=jac,
-                   time_traj=TestTimeTrajectoryFactory(alphas=alphas),
+ics = create_ics(qs, S0 = S0, gamma_f=1)
+result = propagate(ics, V = V, m = m, gamma_f=1,
+                   time_traj=TestTimeTrajectory(alphas=alphas),
                    dt=1e-3, drecord=1/600)
 
 trajs = result.get_trajectories(start=0, end=600)
 trajs['E'] = trajs.p**2/2/m + coulombg.V_0(trajs.q)
 
-time_trajs = TestTimeTrajectoryFactory(alphas=alphas)(qs, coulombg.S0_1(qs))
-ts = np.stack([time_trajs.t_0(t) for t in np.unique(trajs.index)/600]).T.flatten()
+time_trajs = TestTimeTrajectory(alphas=alphas).init(ics)
+ts = np.stack([time_trajs.t_0(t) for t in np.unique(trajs.index.get_level_values(1))/600]).T.flatten()
 tstar = coulombg_pole(np.array([q]), np.array([coulombg.S0_1(q)]), np.array([-1,0,1]))
 
 plt.figure()

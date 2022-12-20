@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Analyzes and produces a wavefunction reconstruction of Coulomb ground state
+after 2 cycles, and produces a figure comparing it to the analytical solution.
 
-This is a temporary script file.
+To produce the data needed for the reconstruction run the following:
+> python ./run_finco_adaptive.py -t 2 -o res_adaptive_0_15_15_15_t_2 2
+> python ./run_finco_adaptive.py -t 2 -o res_adaptive_0_15_15_15_t_2 3
+> python ./run_finco_adaptive.py -t 2 -o res_adaptive_0_15_15_15_t_2 4
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_2/coulombg_2.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_2/coulombg_3.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_2/coulombg_4.hdf
 """
 
 #%% Setup

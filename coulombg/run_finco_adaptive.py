@@ -29,9 +29,9 @@ def main():
                         help="Results directory")
     args = parser.parse_args()
     
-    n_iters = 20
+    n_iters = 7
     n_steps = 1
-    sub_tol = (1e-2, 1e3)
+    sub_tol = (2e-1, 1e3)
     X, Y = np.meshgrid(np.linspace(1e-10, 15, 150), np.linspace(-15, 15, 300))
     
     adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = S0,

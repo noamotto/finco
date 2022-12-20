@@ -60,8 +60,7 @@ def _calc_E(u: pd.DataFrame, v: pd.DataFrame):
     v_pref = v.pref.to_numpy()
 
     return (np.abs((u_pref - v_pref) / (u_pref + v_pref)) *
-            ((np.abs(u_pref) > 1e-6) | (np.abs(v_pref) > 1e-6)) *
-            np.abs(u.q0.to_numpy() - v.q0.to_numpy()))
+            ((np.abs(u_pref) > 1e-6) | (np.abs(v_pref) > 1e-6)))
 
 def _calc_branchcut_est(u: pd.DataFrame, v: pd.DataFrame, w: pd.DataFrame):
     """

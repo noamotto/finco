@@ -7,20 +7,22 @@ This is a temporary script file.
 
 #%% Setup
 
+import os
+
 import numpy as np
 import pandas as pd
 import logging
 from joblib import cpu_count
 
 from finco.time_traj import TimeTrajectory, CircleTraj, LineTraj
-# from finco import NonDivergeingSigmaHeuristic, NonDivergeingMqHeuristic
 from finco.stokes import separate_to_blobs, find_caustics, calc_factor2, approximate_F
 
 # Logging
 logging.basicConfig()
 
-# Determine default number of jobs, as number of physical cores - 1 
-n_jobs = cpu_count(True) - 1
+# Determine default number of jobs, as number of physical cores - 1 or
+# using a designated environment variable
+n_jobs = int(os.getenv('NCPUS', default = cpu_count(True) - 1))
 
 # System params
 m = 1
