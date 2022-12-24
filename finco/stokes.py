@@ -236,7 +236,7 @@ def calc_factor2(caustic: pd.Series, q0: pd.Series, xi: pd.Series,
     """
     logger = logging.getLogger('finco.calc_factor2')
 
-    factor = np.ones_like(xi, dtype=np.float)
+    factor = np.ones_like(xi, dtype=np.float64)
     eps = np.finfo(factor.dtype).eps
 
     F, F_3 = approximate_F(q0, xi, caustic)

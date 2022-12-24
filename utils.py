@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
+General utilities
 """
+
+from typing import Optional
 
 import scipy.misc
 from scipy.signal import correlate
 import numpy as np
+from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import hsv_to_rgb
@@ -17,7 +18,7 @@ from matplotlib.collections import TriMesh
 from splitting_method import SplittingMethod
 from finco import FINCOResults
 
-def plot_spo_vs_finco(spl: SplittingMethod, finco: FINCOResults,x: np.ndarray,
+def plot_spo_vs_finco(spl: SplittingMethod, finco: FINCOResults, x: ArrayLike,
                       x0: float, x1: float, y0: float, y1: float,
                       threshold: float = -1, interval: float = 200, skip: int = 0):
     """
@@ -95,7 +96,7 @@ def derivative(fx, dx, n=5, order=1):
     w = scipy.misc.central_diff_weights(n, order)
     return correlate(fx, w, mode='valid') / dx**order
 
-def complex_to_rgb(c, absmin=0, absmax=np.inf):
+def complex_to_rgb(c: ArrayLike, absmin: float = 0, absmax: float = np.inf):
     """
     Converts an array of complex number to RGB, representing the number's
     norm using the color's intensity, and its phase using the color's hue.
@@ -135,7 +136,9 @@ def complex_to_rgb(c, absmin=0, absmax=np.inf):
     return np.concatenate((rgb, np.expand_dims(np.ones_like(abs_c), -1)),
                           axis=-1)
 
-def tripcolor_complex(x, y, c, absmin=0, absmax=np.inf):
+def tripcolor_complex(x: ArrayLike, y: ArrayLike, c: ArrayLike, 
+                      triangles: Optional[ArrayLike] = None, 
+                      absmin: float = 0, absmax: float = np.inf):
     """
     Creates a traingular mesh plot similar to plt.tripcolor, using complex
     numbers and complex_to_rgb().
@@ -148,6 +151,10 @@ def tripcolor_complex(x, y, c, absmin=0, absmax=np.inf):
         y coordinate of points to plot.
     c : ArrayLike of complex
         complex value of each point.
+    triangles : ArrayLike, optional
+        array of (ntri, 3) of point indices for vertices on the traingles to use
+        in the plot. If None, then a triangluation is performed on the points.
+        The default is None.
     absmin : float, optional
         Minimum cutoff of the norm of complex numbers, for drawing. The default
         is 0.
@@ -161,7 +168,7 @@ def tripcolor_complex(x, y, c, absmin=0, absmax=np.inf):
         The collection representing the drawn mesh.
 
     """
-    tri = Triangulation(x, y)
+    tri = Triangulation(x, y, triangles)
     colors = complex_to_rgb(c, absmin=absmin, absmax=absmax)
 
     col = TriMesh(tri, facecolors=colors)
