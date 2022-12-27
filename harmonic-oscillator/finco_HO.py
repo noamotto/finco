@@ -11,47 +11,55 @@ import matplotlib.pyplot as plt
 from finco import propagate, create_ics, TimeTrajectory
 from utils import complex_to_rgb
 
-
 # System params
 m = 1
 omega = 1
 
-def S0_0(q):
-    return -1j * (0.25 * np.log(2 / np.pi) - (q - 1)**2)
-    
-def S0_1(q):
-    return 2j * (q - 1)
-
-def S0_2(q):
-    return np.full_like(q,2j)
-
 # def S0_0(q):
-#     return -1j * (0.25 * np.log(2 / np.pi) - (q - 1)**4)
+#     return -1j * (0.25 * np.log(2 / np.pi) - (q - 1)**2)
     
 # def S0_1(q):
-#     return 4j *(q - 1)**3
+#     return 2j * (q - 1)
 
 # def S0_2(q):
-#     return 12j *(q - 1)**2
+#     return np.full_like(q,2j)
+
+def S0_0(q):
+    return -1j * (0.25 * np.log(2 / np.pi) - (q - 1)**4)
+    
+def S0_1(q):
+    return 4j *(q - 1)**3
+
+def S0_2(q):
+    return 12j *(q - 1)**2
+
+# def V_0(q):
+#     return 0.5 * m * omega**2 * q ** 2
+    
+# def V_1(q):
+#     return m * omega**2 * q
+
+# def V_2(q):
+#     return np.full_like(q,m * omega**2)
 
 def V_0(q):
-    return 0.5 * m * omega**2 * q ** 2
+    return np.full_like(q, 0)
     
 def V_1(q):
-    return m * omega**2 * q
+    return np.full_like(q, 0)
 
 def V_2(q):
-    return np.full_like(q,m * omega**2)
+    return np.full_like(q, 0)
 
 class HOTimeTrajectory(TimeTrajectory):
     def init(self, ics):
         self.q0 = ics.q
         
     def t_0(self, tau):
-        return np.full_like(self.q0, 2*np.pi*tau)
+        return np.full_like(self.q0, 20*np.pi*tau)
     
     def t_1(self, tau):
-        return np.full_like(self.q0, 2*np.pi)
+        return np.full_like(self.q0, 20*np.pi)
     
     def get_discontinuity_times(self):
         return []

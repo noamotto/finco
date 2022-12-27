@@ -8,7 +8,7 @@ This is a temporary script file.
 #%% Setup
 
 import coulombg
-from coulombg import V, S0, m, CoulombGTimeTrajectory, n_jobs, coulombg_pole, coulombg_diff
+from coulombg import V, S0, m, CoulombGTimeTrajectory, n_jobs, coulombg_pole, coulombg_diff, halfcycle
 
 import numpy as np
 import pandas as pd
@@ -96,60 +96,6 @@ plt.scatter(CoulombGTimeTrajectory.T, 0, c='r')
 
 #     c = 'b' if np.imag(q0) > 0 else 'r'
 #     plt.scatter(E0.real, E0.imag, c=c)
-
-#%% Trajectory in complex time
-
-# X, Y = np.meshgrid(np.linspace(1e-10, 5, 302), np.linspace(-4, 4, 302))
-# X, Y = np.meshgrid(np.linspace(0, 10, 41), np.linspace(-6, 6, 49))
-X, Y = np.meshgrid(np.linspace(-2, 2, 6), 3)
-qs = (X+1j*Y)[(np.abs(X + 1j * Y) > 0.01)]
-order=2
-# qs = qs[(qs != 1j) & (qs != -1j)]
-# qs = np.array([(1.6692307692973847-0.8544698544698544j),
-#                 (1.6769230769895385-0.8544698544698544j)])
-# qs = np.array(-3+3j)
-
-ics = create_ics(qs, S0 = S0, gamma_f=1)
-result = propagate(ics,
-                   V = V, m = m, gamma_f=1,
-                   time_traj = CoulombGTimeTrajectory(n=order),
-                   dt = 1e-4, drecord=1/3000, n_jobs=1)
-
-fig_trajs = plt.figure()
-plt.scatter([0], [0])
-
-trajs = result.get_trajectories(1).sort_index()
-for q0, traj in trajs.groupby('q0'):
-    p0 = coulombg.S0_1(q0)
-    t = traj.t.sort_index()
-    q = traj.q.sort_index()
-
-    # plot time trajectory
-    E0 = p0**2/2/m - 1/q0
-    n = np.arange(-10, 11, 1)
-    tstar = coulombg_pole(q0, p0, n)
-    diff = coulombg_diff(q0, p0)
-    prob = tstar[0].imag - (diff.imag / diff.real)*tstar[0].real < 0
-    
-
-    plt.figure()
-    plt.title('q={}'.format(q0))
-    plt.scatter(tstar.real, tstar.imag, c=n)
-    plt.scatter(np.real(t[:600]), np.imag(t[:600]), marker='+', c='r')
-    plt.scatter(np.real(t[600:1200]), np.imag(t[600:1200]), marker='+', c='b')
-    plt.scatter(np.real(t[1200:1800]), np.imag(t[1200:1800]), marker='+', c='g')
-    plt.scatter(np.real(t[1800:2400]), np.imag(t[1800:2400]), marker='+', c='c')
-    plt.scatter(np.real(t[2400:3000]), np.imag(t[2400:3000]), marker='+', c='m')
-
-    # Plot space trajectory
-    plt.figure(fig_trajs)
-    plt.scatter(np.real(q[:600]),       np.imag(q[:600]), marker='+', c='r')
-    plt.scatter(np.real(q[600:1200]),   np.imag(q[600:1200]), marker='+', c='b')
-    plt.scatter(np.real(q[1200:1800]),  np.imag(q[1200:1800]), marker='+', c='g')
-    plt.scatter(np.real(q[1800:2400]),  np.imag(q[1800:2400]), marker='+', c='c')
-    plt.scatter(np.real(q[2400:3000]),  np.imag(q[2400:3000]), marker='+', c='m')
-    plt.scatter(np.real(q)[-1], np.imag(q)[-1], c='r' if prob else 'b')
-
 
 #%% Trajectory crash test
     
