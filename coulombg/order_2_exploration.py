@@ -65,25 +65,24 @@ stokes_c[:,3] = stokes_mask
 
 fig, (no_filter, stokes_filter) = plt.subplots(1, 2, num='pref_q')
 no_filter.scatter(np.real(trajs.q), np.imag(trajs.q), c=complex_to_rgb(trajs.pref, absmax=1e7))
-no_filter.set_xlim(-5, 110)
-no_filter.set_ylim(-10, 10)
+no_filter.set_xlim(-10, 70)
+no_filter.set_ylim(-60, 60)
 
 stokes_filter.scatter(np.real(trajs.q), np.imag(trajs.q), c = stokes_c)
-stokes_filter.set_xlim(-5, 110)
-stokes_filter.set_ylim(-10, 10)
-
+stokes_filter.set_xlim(-10, 70)
+stokes_filter.set_ylim(-60, 60)
 
 #%% End of circumnavigation time figures
 tend = CoulombGTimeTrajectory(2, t=T).init(res.get_results(0,1)).b
 
 fig, (no_filter, stokes_filter) = plt.subplots(1, 2, num='pref_tend')
 no_filter.scatter(np.real(tend), np.imag(tend), c=complex_to_rgb(trajs.pref, absmax=1e7))
-no_filter.set_xlim(-150, 150)
-no_filter.set_ylim(-150, 150)
+no_filter.set_xlim(-100, 100)
+no_filter.set_ylim(-100, 100)
 
 stokes_filter.scatter(np.real(tend), np.imag(tend), c = stokes_c)
-stokes_filter.set_xlim(-25, 75)
-stokes_filter.set_ylim(-40, 20)
+stokes_filter.set_xlim(-25, 60)
+stokes_filter.set_ylim(-25, 20)
 
 
 #%% Reconstruction
