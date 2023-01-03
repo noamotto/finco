@@ -19,7 +19,7 @@ T = 1*2*halfcycle
 qs = np.array([3-3j])
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
-fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3)
+fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3, num='trajs_q_f')
 fig.suptitle(f'q={qs[0]}, T={T:.3f}')
 
 #%% Order 0
@@ -45,11 +45,15 @@ for q0, traj in trajs.groupby('q0'):
     t_o0.scatter(tstar.real, tstar.imag, c=n)
     t_o0.plot(np.real(t[:600]),      np.imag(t[:600]), 'r', lw=3)
     t_o0.plot(np.real(t[600:1200]),  np.imag(t[600:1200]), 'b', lw=3)
+    t_o0.set_xlabel(r'$\Re t$')
+    t_o0.set_ylabel(r'$\Im t$')
 
     # Plot space trajectory
     q_o0.scatter([0], [0])
     q_o0.plot(np.real(q[:600]),      np.imag(q[:600]), 'r', lw=3)
     q_o0.plot(np.real(q[600:1200]),  np.imag(q[600:1200]), 'b', lw=3)
+    q_o0.set_xlabel(r'$\Re q$')
+    q_o0.set_ylabel(r'$\Im q$')
 
 
 #%% Order 1
@@ -76,12 +80,16 @@ for q0, traj in trajs.groupby('q0'):
     t_o1.plot(np.real(t[:600]),      np.imag(t[:600]), 'r', lw=3)
     t_o1.plot(np.real(t[600:1200]),  np.imag(t[600:1200]), 'g', lw=3)
     t_o1.plot(np.real(t[1200:1800]), np.imag(t[1200:1800]), 'b', lw=3)
+    t_o1.set_xlabel(r'$\Re t$')
+    t_o1.set_ylabel(r'$\Im t$')
 
     # Plot space trajectory
     q_o1.scatter([0], [0])
     q_o1.plot(np.real(q[:600]),      np.imag(q[:600]), 'r', lw=3)
     q_o1.plot(np.real(q[600:1200]),  np.imag(q[600:1200]), 'g', lw=3)
     q_o1.plot(np.real(q[1200:1800]), np.imag(q[1200:1800]), 'b', lw=3)
+    q_o1.set_xlabel(r'$\Re q$')
+    q_o1.set_ylabel(r'$\Im q$')
 
 #%% Order 2
 
@@ -109,6 +117,8 @@ for q0, traj in trajs.groupby('q0'):
     t_o2.plot(np.real(t[1200:1800]), np.imag(t[1200:1800]), 'c', lw=3)
     t_o2.plot(np.real(t[1800:2400]), np.imag(t[1800:2400]), 'm', lw=3)
     t_o2.plot(np.real(t[2400:3000]), np.imag(t[2400:3000]), 'b', lw=3)
+    t_o2.set_xlabel(r'$\Re t$')
+    t_o2.set_ylabel(r'$\Im t$')
 
     # Plot space trajectory
     q_o2.scatter([0], [0])
@@ -117,3 +127,5 @@ for q0, traj in trajs.groupby('q0'):
     q_o2.plot(np.real(q[1200:1800]), np.imag(q[1200:1800]), 'c', lw=3)
     q_o2.plot(np.real(q[1800:2400]), np.imag(q[1800:2400]), 'm', lw=3)
     q_o2.plot(np.real(q[2400:3000]), np.imag(q[2400:3000]), 'b', lw=3)
+    q_o2.set_xlabel(r'$\Re q$')
+    q_o2.set_ylabel(r'$\Im q$')

@@ -13,6 +13,7 @@ To produce the data needed for the reconstruction run the following:
 """
 
 #%% Setup
+import os
 
 from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle
 
@@ -28,7 +29,12 @@ logger.setLevel(logging.INFO)
 
 T = halfcycle*2*1.5
 x = np.arange(-12, 12, 1e-1)
-y = 2**0.5*x*np.exp(-np.abs(x) -0.5*1j*T)
+y = 2**0.5*x*np.exp(-np.abs(x) + 0.5*1j*T)
+
+try:
+    os.mkdir('reconstruction')
+except FileExistsError:
+    pass
 
 res1 = load_results('res_adaptive_0_15_15_15_t_1.5/coulombg_1.hdf')
 res2 = load_results('res_adaptive_0_15_15_15_t_1.5/coulombg_2.hdf')
@@ -68,7 +74,8 @@ psi1 = res1.reconstruct_psi(x, 1, S_F1 * (np.imag(ts1) > 0) * mask1, n_jobs=n_jo
 psi2 = res2.reconstruct_psi(x, 1, S_F2 * (np.imag(ts2) > 0) * mask2, n_jobs=n_jobs)
 psi3 = res3.reconstruct_psi(x, 1, S_F3 * (np.imag(ts3) > 0) * mask3, n_jobs=n_jobs)
 
-plt.figure('1.5cycle')
+plt.figure('1.5cycles')
+plt.title(r'$T=1.5T_g$')
 plt.plot(x, np.real(y), c=plt.cm.tab10(0))
 plt.plot(x, np.imag(y), ':', c=plt.cm.tab10(0))
 plt.plot(x, np.real(psi1+psi2+psi3), c=plt.cm.tab10(1))
@@ -76,3 +83,6 @@ plt.plot(x, np.imag(psi1+psi2+psi3), ':', c=plt.cm.tab10(1))
 
 plt.xlabel(r'$x$')
 plt.legend([r'QM $Re(\psi)$', r'QM $Im(\psi)$', r'FINCO $Re(\psi)$', r'FINCO $Im(\psi)$'])
+
+plt.tight_layout()
+plt.savefig('reconstruction/1.5cycles.png')

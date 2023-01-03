@@ -12,6 +12,7 @@ To produce the data needed for this analysis run the following:
 """
 
 #%% Setup
+import os
 
 from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle
 
@@ -21,7 +22,12 @@ from matplotlib.colors import ListedColormap
 import logging
 
 from finco import load_results
-from utils import tripcolor_complex, complex_to_rgb
+from utils import tripcolor_complex
+
+try:
+    os.mkdir('orders_comparison')
+except FileExistsError:
+    pass
 
 logging.getLogger('finco').setLevel(logging.INFO)
 logger = logging.getLogger('analysis')
@@ -70,7 +76,7 @@ trajs4 = res4.get_trajectories(1)
 trajs5 = res5.get_trajectories(1)
 trajs6 = res6.get_trajectories(1)
 
-fig, (pref4, pref5, pref6) = plt.subplots(1, 3, num='prefs_segmented')
+fig, (pref4, pref5, pref6) = plt.subplots(1, 3, num='prefs_segmented', figsize=(14.4, 4.8))
 
 plt.sca(pref4)
 tripcolor_complex(np.real(trajs4.q0), np.imag(trajs4.q0), trajs4.pref, absmax=1e7)
@@ -92,7 +98,10 @@ pref6.tricontourf(np.real(trajs6.q0), np.imag(trajs6.q0), S_F6 * (np.imag(ts6) >
 pref6.set_title(r"$n=6$")
 pref6.set_xlabel(r"$\Re q_0$")
 pref6.set_ylabel(r"$\Im q_0$")
-    
+
+fig.tight_layout()
+fig.savefig('orders_comparison/prefs_segmented.png')
+
 #%% Prefactor maps with mask
 stokes_cmap = ListedColormap([[1,0,0,a] for a in np.linspace(.2, 0)])
 mask_cmap = ListedColormap([[0,1,0,a] for a in np.linspace(0, .2)])
@@ -101,7 +110,7 @@ trajs4 = res4.get_trajectories(1)
 trajs5 = res5.get_trajectories(1)
 trajs6 = res6.get_trajectories(1)
 
-fig, (pref4, pref5, pref6) = plt.subplots(1, 3, num='prefs_segmented_masked')
+fig, (pref4, pref5, pref6) = plt.subplots(1, 3, num='prefs_segmented_masked', figsize=(14.4, 4.8))
 
 plt.sca(pref4)
 tripcolor_complex(np.real(trajs4.q0), np.imag(trajs4.q0), trajs4.pref, absmax=1e7)
@@ -129,3 +138,6 @@ pref6.tricontourf(np.real(trajs6.q0), np.imag(trajs6.q0),
 pref6.set_title(r"$n=6$")
 pref6.set_xlabel(r"$\Re q_0$")
 pref6.set_ylabel(r"$\Im q_0$")
+
+fig.tight_layout()
+fig.savefig('orders_comparison/prefs_segmented_masked.png')
