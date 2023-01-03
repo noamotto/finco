@@ -7,6 +7,7 @@ is produced.
 """
 
 #%% Setup
+import os
 
 from coulombg import V, S0, m, CoulombGTimeTrajectory, coulombg_pole, halfcycle
 
@@ -19,7 +20,13 @@ T = 1*2*halfcycle
 qs = np.array([3-3j])
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
-fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3, num='trajs_q_f')
+try:
+    os.mkdir('system_exploration')
+except FileExistsError:
+    pass
+
+fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3, num='trajs_q_f',
+                                                             figsize=(14.4, 9.6))
 fig.suptitle(f'q={qs[0]}, T={T:.3f}')
 
 #%% Order 0
@@ -129,3 +136,6 @@ for q0, traj in trajs.groupby('q0'):
     q_o2.plot(np.real(q[2400:3000]), np.imag(q[2400:3000]), 'b', lw=3)
     q_o2.set_xlabel(r'$\Re q$')
     q_o2.set_ylabel(r'$\Im q$')
+
+fig.tight_layout()
+fig.savefig('system_exploration/trajs_q_f.png')
