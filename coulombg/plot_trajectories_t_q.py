@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from finco import propagate, create_ics
 
 T = 1*2*halfcycle
-qs = np.array([3-3j])
+qs = np.array([2+0.5j])
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
 try:

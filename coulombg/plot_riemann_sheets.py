@@ -6,15 +6,17 @@ This is a temporary script file.
 """
 
 #%% Setup
+import os
 
 from coulombg import V, S0, m, coulombg_pole, coulombg_diff
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.tri import Triangulation
+from mayavi import mlab
 
 from finco import propagate, create_ics
-from finco.time_traj import TimeTrajectory, CircleTraj, LineTraj
+from finco.time_traj import TimeTrajectory, LineTraj
 
 class InitialPlaneTimeTrajectory(TimeTrajectory):
     def __init__(self, alphas):
@@ -112,9 +114,18 @@ class SecondPlaneTimeTrajectory(TimeTrajectory):
     def get_discontinuity_times(self):
         return [0.05, 0.1, 0.15, 0.2, 0.36, 0.52, 0.68, 0.84]
 
+
+try:
+    os.mkdir('system_exploration')
+except FileExistsError:
+    pass
+
+
+mlab.figure('riemann_sheets', size=(900, 500))
+
 #%% Initial Plane
 
-q = 1+1j
+q = 2+0.5j
 alphas = np.concatenate([np.linspace(-1, -1/3-1e-2, 20), 
                         np.linspace(-1/3+1e-2, 1/3-1e-2, 40),
                         np.linspace(1/3-1e-2, 1, 20)])
@@ -125,19 +136,26 @@ result1 = propagate(ics, V = V, m = m, gamma_f=1,
                    time_traj=InitialPlaneTimeTrajectory(alphas=alphas),
                    dt=1e-3, drecord=1/400, trajs_path=None)
 
-trajs1 = result1.get_trajectories(start=0, end=400)
+# Flat version
 
-# ax = plt.figure().add_subplot(projection="3d")
+# trajs1 = result1.get_trajectories(start=0, end=400)
+# plt.figure()
 # plt.title('q={}'.format(q))
-# ax.scatter(np.real(trajs.t), np.imag(trajs.t), np.real(trajs.p))
+# plt.scatter(np.real(trajs1.t), np.imag(trajs1.t), c=np.real(trajs1.p))
+# plt.colorbar()
 
-plt.figure()
-plt.title('q={}'.format(q))
-plt.scatter(np.real(trajs1.t), np.imag(trajs1.t), c=np.real(trajs1.p))
-plt.colorbar()
+parts = [0,20,60,80]
+trajs1 = result1.get_trajectories(start=100, end=400)
+for start, end in zip(parts[:-1], parts[1:]):
+    trajs = trajs1.loc[start:end]
+    triangles = Triangulation(np.real(trajs.t), np.imag(trajs.t)).triangles
+    mlab.triangular_mesh(np.real(trajs.t), np.imag(trajs.t), 
+                         np.real(trajs.p), triangles, color=plt.cm.tab10(0)[:3])
+    
+    # ax.plot_trisurf(np.real(trajs1.t), np.imag(trajs1.t), np.real(trajs1.p), color=plt.cm.tab10(0))
 
 #%% Second plane
-alphas = np.linspace(-0.975, 0.975, 80)
+alphas = np.linspace(-0.97, 0.97, 80)
 qs = np.full(len(alphas), q)
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
@@ -145,11 +163,26 @@ result2 = propagate(ics, V = V, m = m, gamma_f=1,
                    time_traj=SecondPlaneTimeTrajectory(alphas=alphas),
                    dt=1e-3, drecord=1/500, trajs_path=None)
 
-trajs2 = result2.get_trajectories(start=100, end=500)
+# Flat version
 
-# ax.scatter(np.real(trajs.t), np.imag(trajs.t), np.real(trajs.p), color=plt.cm.tab10(1))
+# trajs2 = result2.get_trajectories(start=100, end=500)
+# plt.figure()
+# plt.title('q={}'.format(q))
+# plt.scatter(np.real(trajs2.t), np.imag(trajs2.t), c=np.real(trajs2.p))
+# plt.colorbar()
 
-plt.figure()
-plt.title('q={}'.format(q))
-plt.scatter(np.real(trajs2.t), np.imag(trajs2.t), c=np.real(trajs2.p))
-plt.colorbar()
+times = SecondPlaneTimeTrajectory(alphas=alphas).get_discontinuity_times()[4:] + [1]
+for start, end in zip(times[:-1], times[1:]):
+    trajs2 = result2.get_trajectories(start=start*500, end=end*500)
+    triangles = Triangulation(np.real(trajs2.t), np.imag(trajs2.t)).triangles
+    mlab.triangular_mesh(np.real(trajs2.t), np.imag(trajs2.t), 
+                         np.real(trajs2.p), triangles, color=plt.cm.tab10(1)[:3])
+
+#%% Scene stuff
+view = (-75, 63, 31,
+        np.array([ 1.8,  1.55, -2.0]))
+
+mlab.axes(color=(1,1,1), extent=[-8, 12, -3, 4, -4, 4], nb_labels=3,
+          xlabel="", ylabel="", zlabel="")
+mlab.view(*view)
+mlab.savefig('system_exploration/riemann_sheets.png')

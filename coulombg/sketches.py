@@ -6,8 +6,6 @@ This is a temporary script file.
 """
 
 #%% Setup
-
-import coulombg
 from coulombg import V, S0, m, CoulombGTimeTrajectory, n_jobs, coulombg_pole, coulombg_diff, halfcycle
 
 import numpy as np
@@ -65,37 +63,18 @@ X, Y = np.meshgrid(3, np.linspace(-1, -0.8, 20))
 qs = (X+1j*Y)[(np.abs(X + 1j * Y) > 0.01)]
 qs = qs[(qs != 1j) & (qs != -1j)]
 
-# s = np.linspace(0,1,1000)
-# qs = 1 + (0-2*s)*1j
 
 n = np.arange(-10, 11, 1)
 
-ps = coulombg.S0_1(qs)
-# ps[qs.real < 0] = np.conj(ps[qs.real < 0])
+ps = S0[1](qs)
 Es = ps**2/2/m - 1/qs
 sign = np.ones_like(Es)
 sign[Es.imag < 0] *= -1
 
-# a = (-qs*ps/2/Es + (m/2)**0.5 * (np.log((2*Es/m)**0.5*ps*qs*sign + 2*Es*qs + 1))/2/Es**1.5/sign)
-# b = 1j/2/Es**1.5/sign
 tstars = np.stack([coulombg_pole(qs, ps, n) for n in np.arange(-10, 11, 1)])
 
-# # diff = coulombg_diff(qs, ps)
-# # r_dir = np.sign(diff)
-# # first = np.array((coulombg_pole(qs, ps, n=0) + coulombg_pole(qs, ps, n=1)) / 2)
-
-# plt.figure()
-# plt.scatter(qs.real, qs.imag, c=np.sign(diff.real))
-# plt.colorbar()
 plt.scatter(tstars.real, tstars.imag, c=np.tile(qs, (n.size,1)).imag)
-plt.scatter(CoulombGTimeTrajectory.T, 0, c='r')
-
-# for (q0,p0,E0,sgn) in zip(qs,ps,Es,sign):
-#     tstar = coulombg_pole(np.array([q0]), np.array([p0]), n)
-#     a = -q0*p0/2/E0 + (m/2)**0.5 * np.log((2*E0/m)**0.5*p0*q0*sgn + 2*E0*q0 + 1)/2/E0**1.5/sgn
-
-#     c = 'b' if np.imag(q0) > 0 else 'r'
-#     plt.scatter(E0.real, E0.imag, c=c)
+# plt.scatter(CoulombGTimeTrajectory.T, 0, c='r')
 
 #%% Trajectory crash test
     
@@ -198,11 +177,11 @@ result = propagate(ics, V = V, m = m, gamma_f=1,
                    dt=1e-3, drecord=1/600)
 
 trajs = result.get_trajectories(start=0, end=600)
-trajs['E'] = trajs.p**2/2/m + coulombg.V_0(trajs.q)
+trajs['E'] = trajs.p**2/2/m + V[0](trajs.q)
 
 time_trajs = TestTimeTrajectory(alphas=alphas).init(ics)
 ts = np.stack([time_trajs.t_0(t) for t in np.unique(trajs.index.get_level_values(1))/600]).T.flatten()
-tstar = coulombg_pole(np.array([q]), np.array([coulombg.S0_1(q)]), np.array([-1,0,1]))
+tstar = coulombg_pole(np.array([q]), np.array([S0[1](q)]), np.array([-1,0,1]))
 
 plt.figure()
 plt.title('q={}'.format(q))
