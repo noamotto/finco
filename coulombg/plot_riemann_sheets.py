@@ -84,7 +84,7 @@ class SecondPlaneTimeTrajectory(TimeTrajectory):
 
         # Second sheet
         e = d - (t_inner - a) * (self.alphas+1)/2
-        f = e + 2 * diff * (self.alphas+1)/2
+        f = e + 2.2 * diff * (self.alphas+1)/2
         g = f + (t_inner - a) * (self.alphas+1)
         h = g - diff - 2 * diff * (self.alphas+1)/2
         i = t_inner - diff - 2 * diff * (self.alphas+1)/2
@@ -177,6 +177,10 @@ for start, end in zip(times[:-1], times[1:]):
     triangles = Triangulation(np.real(trajs2.t), np.imag(trajs2.t)).triangles
     mlab.triangular_mesh(np.real(trajs2.t), np.imag(trajs2.t), 
                          np.real(trajs2.p), triangles, color=plt.cm.tab10(1)[:3])
+
+traj = result2.get_trajectories(start=0, end=500).loc[50]
+mlab.plot3d(np.real(traj.t), np.imag(traj.t), np.real(traj.p)+0.1, color=(1,0,0))
+mlab.plot3d(np.real(traj.t), np.imag(traj.t), np.linspace(-4, -3.7, len(traj.t)), color=(1,0,0))
 
 #%% Scene stuff
 view = (-75, 63, 31,
