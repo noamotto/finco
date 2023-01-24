@@ -77,10 +77,7 @@ class EckartTrajectory(TimeTrajectory):
     def init(self, ics):
         # Calc Radii of circles
         q0, p0, t0 = ics.q0.to_numpy(), ics.p0.to_numpy(), ics.t.to_numpy()
-        diff = coulombg_diff(q0, p0)
-        self.r = np.array(-diff / 2)
-        self.first = np.zeros(q0.shape)
-
+        diff_y, diff_x = eckart_diff(q0, p0)
         # Calc points of interest on the trajectory
 
         # t0: Initial point
@@ -90,7 +87,7 @@ class EckartTrajectory(TimeTrajectory):
         t1 = self.t(q0, p0)
 
         # a: Point of entrance to the poles line.
-        self.a = np.array((coulombg_pole(q0, p0, n=0) + coulombg_pole(q0, p0, n=1)) / 2)
+        self.a = np.array(np.mean(eckart_pole(q0, p0, np.array([-1,0,-1,0]), np.array([1,1,0,0]))) - diff_x)
         self.a[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] += self.r[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] *2
         # self.a -= self.r *2
         # self.first[q0.real < 0] -= 1

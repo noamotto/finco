@@ -108,7 +108,7 @@ logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.DEBUG)
 n_iters = 20
 n_steps = 1
-sub_tol = (1e-2,1e3)
+sub_tol = (2e-1,1e3)
 
 X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 51), np.linspace(-2.5, 2.5, 51))
 result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2],

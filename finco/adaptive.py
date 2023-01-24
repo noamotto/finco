@@ -185,7 +185,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
     sub_tol : float or 2-tuple of floats
         Lower and Upper tolerance thresholds for subsampling. If one number is
         given, it is treated as lower limit for subsampling, and the upper limit
-        is set to the logarithm of 1/epsilon.
+        is set to infinity.
     plot_steps : bool, optional
         Whether to generate a plot with the result of the last step. The plot's
         description is documented at _plot_step()

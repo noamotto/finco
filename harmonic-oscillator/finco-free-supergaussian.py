@@ -65,7 +65,6 @@ def locate_caustics_analytic(t):
 #%% Run
 
 X, Y = np.meshgrid(np.linspace(-2, 4, 61), np.linspace(-3, 3, 61))
-jac = (X[0,1] - X[0,0]) *  (Y[1,0] - Y[0,0])
 
 ics = create_ics(q0 = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2], gamma_f=1)
 
@@ -81,7 +80,9 @@ for i, step in enumerate([0, 20, 100]):
     plt.sca(ax[i]), tripcolor_complex(np.real(ics.q0), np.imag(ics.q0), xi_1, absmin=0.2)
     ax[i].scatter(np.real(caustics), np.imag(caustics), s=10)
     ax[i].set_xlabel(r'$\Re(q_0)$')
+    ax[i].set_xlim(-2, 4)
     ax[i].set_ylabel(r'$\Im(q_0)$')
+    ax[i].set_ylim(-3, 3)
     ax[i].set_title(r'$t={}\pi / \omega$'.format(int(step/100*10)))
 
 plt.tight_layout()
