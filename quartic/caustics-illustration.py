@@ -16,7 +16,9 @@ from matplotlib.collections import TriMesh
 
 from finco import TimeTrajectory, create_ics, propagate
 from finco.stokes import separate_to_blobs, find_caustics, calc_factor2, approximate_F
-from utils import tripcolor_complex
+# from utils import tripcolor_complex
+
+plt.rc('font', size=14)
 
 logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.INFO)

@@ -23,6 +23,8 @@ import logging
 
 from finco import load_results
 
+plt.rc('font', size=14)
+
 logging.getLogger('finco').setLevel(logging.INFO)
 logger = logging.getLogger('analysis')
 logger.setLevel(logging.INFO)
@@ -82,7 +84,8 @@ plt.plot(x, np.real(psi0+psi1+psi2), c=plt.cm.tab10(1))
 plt.plot(x, np.imag(psi0+psi1+psi2), ':', c=plt.cm.tab10(1))
 
 plt.xlabel(r'$x$')
-plt.legend([r'QM $Re(\psi)$', r'QM $Im(\psi)$', r'FINCO $Re(\psi)$', r'FINCO $Im(\psi)$'])
+plt.legend([r'QM $Re(\psi)$', r'QM $Im(\psi)$', r'FINCO $Re(\psi)$', r'FINCO $Im(\psi)$'],
+           fontsize=12)
 
 plt.tight_layout()
 plt.savefig('reconstruction/1cycle.png')

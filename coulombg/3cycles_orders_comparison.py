@@ -24,6 +24,8 @@ import logging
 from finco import load_results
 from utils import tripcolor_complex
 
+plt.rc('font', size=16)
+
 try:
     os.mkdir('orders_comparison')
 except FileExistsError:

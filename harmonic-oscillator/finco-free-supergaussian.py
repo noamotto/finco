@@ -15,6 +15,8 @@ from finco.stokes import separate_to_blobs, find_caustics
 
 #%% Setup
 
+plt.rc('font', size=14)
+
 import os
 
 try:
@@ -79,9 +81,9 @@ for i, step in enumerate([0, 20, 100]):
     
     plt.sca(ax[i]), tripcolor_complex(np.real(ics.q0), np.imag(ics.q0), xi_1, absmin=0.2)
     ax[i].scatter(np.real(caustics), np.imag(caustics), s=10)
-    ax[i].set_xlabel(r'$\Re(q_0)$')
+    ax[i].set_xlabel(r'$\Re q_0$')
     ax[i].set_xlim(-2, 4)
-    ax[i].set_ylabel(r'$\Im(q_0)$')
+    ax[i].set_ylabel(r'$\Im q_0$')
     ax[i].set_ylim(-3, 3)
     ax[i].set_title(r'$t={}\pi / \omega$'.format(int(step/100*10)))
 

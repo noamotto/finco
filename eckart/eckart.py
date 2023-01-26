@@ -29,16 +29,18 @@ m = 1060
 V0 = 0.01562
 a = 0.734
 
-halfcycle = 2 * np.pi
+q_c = -8 + 0j
+gamma_c = 0.5 + 0j
+p_c = 4 + 0j
 
 def S0_0(q):
-    return 1j * (q - np.log(q) - 0.5*np.log(2))
+    return 1j*gamma_c*(q - q_c)**2 + p_c * (q - q_c) - 1j/4 * np.log(2 * gamma_c / np.pi)
 
 def S0_1(q):
-    return np.array(1j * (1 - 1./q))
+    return 2j*gamma_c*(q - q_c) + p_c
 
 def S0_2(q):
-    return 1j / q**2
+    return np.full_like(q, 2j*gamma_c)
 
 def V_0(q):
     return V0 / np.cosh(q / a) ** 2
@@ -65,9 +67,10 @@ def eckart_diff(q0, p0):
             eckart_pole(q0, p0, sign=0) - eckart_pole(q0, p0, sign=1))
 
 
-class EckartTrajectory(TimeTrajectory):
-    def __init__(self, n, t = 3*2*halfcycle):
-        self.n = n
+class EckartTimeTrajectory(TimeTrajectory):
+    def __init__(self, n0, n1, t):
+        self.n0 = n0
+        self.n1 = n1
         
         if isinstance(t, float):
             self.t = lambda q,p: np.full_like(q, t)
@@ -86,61 +89,95 @@ class EckartTrajectory(TimeTrajectory):
         # t1: Final point
         t1 = self.t(q0, p0)
 
-        # a: Point of entrance to the poles line.
-        self.a = np.array(np.mean(eckart_pole(q0, p0, np.array([-1,0,-1,0]), np.array([1,1,0,0]))) - diff_x)
-        self.a[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] += self.r[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] *2
-        # self.a -= self.r *2
-        # self.first[q0.real < 0] -= 1
+        # a: Point approaching the poles line
+        self.a = np.array((eckart_pole(q0, p0, n=-1, sign=1) + 
+                           eckart_pole(q0, p0, n=0, sign=1) - 
+                           diff_x) / 2)
 
-        # b: Point of exit from the poles line
-        self.b = self.a + 2*self.n*self.r
+        # b: Point of entrance to the poles ladder
+        self.b = self.a + self.n0*diff_y
         
-        # c: Point for enough from ploes line, towards the ending position
-        self.c = np.array([self.b - self.r * 1j, self.b + self.r * 1j])
-        close = np.argmin(np.abs(self.c - t1)[:,np.newaxis], axis=0)
-        self.c = np.take_along_axis(self.c, close, axis=0).squeeze()
+        # c: Point in the middle of the ladder
+        self.c = self.b + diff_x
+        
+        # d: Point between the poles in the exit point
+        self.d = self.c + (self.n1 - self.n0)*diff_y
+        
+        # e: Point approaching out of the ladder
+        self.e = self.d + diff_x
+
+        # f: Point back on real axis
+        self.f = self.e - self.n1*diff_y
 
         # Build path
-        self.path = []
-        self.discont_times = []
-        if self.n==0:
-            self.discont_times = [1/2, 3/4]
-
-            self.path.append(LineTraj(t0=0, t1=1/2, a=t0, b=self.a))
-            self.path.append(LineTraj(t0=1/2, t1=3/4, a=self.b, b=self.c))
-            self.path.append(LineTraj(t0=3/4, t1=1, a=self.c, b=t1))
-
-        elif self.n==1:
-            self.discont_times = [1/3, 2/3, 5/6]
-
-            self.path.append(LineTraj(t0=0, t1=1/3, a=t0, b=self.a))
-            self.path.append(CircleTraj(t0=1/3, t1=2/3, a=self.a, r=self.r,
-                                        turns=-1.5 + self.first, phi0=np.pi))
-            self.path.append(LineTraj(t0=2/3, t1=5/6, a = self.b, b=self.c))
-            self.path.append(LineTraj(t0=5/6, t1=1, a = self.c, b=t1))
-
-        else:
-            Ts = list(np.linspace(1/(2*self.n+1), 1-1/(2*self.n+1), 2*self.n)) + [1-1/(2*self.n+1)/2]
-            self.discont_times = Ts
-
-            self.path.append(LineTraj(t0=0, t1=Ts[0], a=t0, b=self.a))
-            self.path.append(CircleTraj(t0=Ts[0], t1=Ts[1], a=self.a, r=self.r,
-                                        turns=-1.25 + self.first, phi0=np.pi))
-            self.path.append(LineTraj(t0=Ts[1], t1=Ts[2],
-                                      a=self.a + (1+1j)*self.r, b=self.a + (3+1j)*self.r))
-
-            for i in range(self.n-2):
-                a = self.a + (2*i+3+1j)*self.r
-                self.path.append(CircleTraj(t0=Ts[2*i+2], t1=Ts[2*i+3],
-                                            a=a, r=self.r, turns=-1, phi0=np.pi/2))
-                self.path.append(LineTraj(t0=Ts[2*i+3], t1=Ts[2*i+4], a=a, b=a+2*self.r))
-
-            self.path.append(CircleTraj(t0=Ts[-3], t1=Ts[-2],
-                                        a=self.a + (2*self.n-1+1j)*self.r, r=self.r,
-                                        turns=-1.25, phi0=np.pi/2))
-            self.path.append(LineTraj(t0=Ts[-2], t1=Ts[-1], a=self.b, b=self.c))
-            self.path.append(LineTraj(t0=Ts[-1], t1=1, a=self.c, b=t1))
-
+        if self.n0 != 0:
+            if self.n0 != self.n1:
+                if self.n1 != 0:
+                    self.path = [LineTraj(t0=0,   t1=1/7, a=t0,     b=self.a),
+                                 LineTraj(t0=1/7, t1=2/7, a=self.a, b=self.b),
+                                 LineTraj(t0=2/7, t1=3/7, a=self.b, b=self.c),
+                                 LineTraj(t0=3/7, t1=4/7, a=self.c, b=self.d),
+                                 LineTraj(t0=4/7, t1=5/7, a=self.d, b=self.e),
+                                 LineTraj(t0=5/7, t1=6/7, a=self.e, b=self.f),
+                                 LineTraj(t0=6/7, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 7) / 7
+                else: # e = f
+                    self.path = [LineTraj(t0=0,   t1=1/6, a=t0,     b=self.a),
+                                 LineTraj(t0=1/6, t1=2/6, a=self.a, b=self.b),
+                                 LineTraj(t0=2/6, t1=3/6, a=self.b, b=self.c),
+                                 LineTraj(t0=3/6, t1=4/6, a=self.c, b=self.d),
+                                 LineTraj(t0=4/6, t1=5/6, a=self.d, b=self.e),
+                                 LineTraj(t0=5/6, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 6) / 6
+            else: # c = d
+                if self.n1 != 0:
+                    self.path = [LineTraj(t0=0,   t1=1/6, a=t0,     b=self.a),
+                                 LineTraj(t0=1/6, t1=2/6, a=self.a, b=self.b),
+                                 LineTraj(t0=2/6, t1=3/6, a=self.b, b=self.c),
+                                 LineTraj(t0=3/6, t1=4/6, a=self.d, b=self.e),
+                                 LineTraj(t0=4/6, t1=5/6, a=self.e, b=self.f),
+                                 LineTraj(t0=5/6, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 6) / 6
+                else: # e = f
+                    self.path = [LineTraj(t0=0,   t1=1/5, a=t0,     b=self.a),
+                                 LineTraj(t0=1/5, t1=2/5, a=self.a, b=self.b),
+                                 LineTraj(t0=2/5, t1=3/5, a=self.b, b=self.c),
+                                 LineTraj(t0=3/5, t1=4/5, a=self.d, b=self.e),
+                                 LineTraj(t0=4/5, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 5) / 5
+        else: # a = b
+            if self.n0 != self.n1:
+                if self.n1 != 0:
+                    self.path = [LineTraj(t0=0,   t1=1/6, a=t0,     b=self.a),
+                                 LineTraj(t0=1/6, t1=2/6, a=self.b, b=self.c),
+                                 LineTraj(t0=2/6, t1=3/6, a=self.c, b=self.d),
+                                 LineTraj(t0=3/6, t1=4/6, a=self.d, b=self.e),
+                                 LineTraj(t0=4/6, t1=5/6, a=self.e, b=self.f),
+                                 LineTraj(t0=5/6, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 6) / 6
+                else: # e = f
+                    self.path = [LineTraj(t0=0,   t1=1/5, a=t0,     b=self.a),
+                                 LineTraj(t0=1/5, t1=2/5, a=self.b, b=self.c),
+                                 LineTraj(t0=2/5, t1=3/5, a=self.c, b=self.d),
+                                 LineTraj(t0=3/5, t1=4/5, a=self.d, b=self.e),
+                                 LineTraj(t0=4/5, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 5) / 5
+            else: # c = d
+                if self.n1 != 0:
+                    self.path = [LineTraj(t0=0,   t1=1/5, a=t0,     b=self.a),
+                                 LineTraj(t0=1/5, t1=2/5, a=self.b, b=self.c),
+                                 LineTraj(t0=2/5, t1=3/5, a=self.d, b=self.e),
+                                 LineTraj(t0=3/5, t1=4/5, a=self.e, b=self.f),
+                                 LineTraj(t0=4/5, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 5) / 5
+                else: # e = f
+                    self.path = [LineTraj(t0=0,   t1=1/4, a=t0,     b=self.a),
+                                 LineTraj(t0=1/4, t1=2/4, a=self.b, b=self.c),
+                                 LineTraj(t0=2/4, t1=3/4, a=self.d, b=self.e),
+                                 LineTraj(t0=3/4, t1=1,   a=self.f, b=t1),]
+                    self.discont_times = np.arange(1, 4) / 4
+            
+        self.discont_times = list(self.discont_times)
         return self
 
     def t_0(self, tau):
@@ -206,3 +243,4 @@ class EckartTrajectory(TimeTrajectory):
 #     S_F *= (np.abs(deriv.xi_1) <= 100)
 
 #     return S_F
+
