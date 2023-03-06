@@ -95,7 +95,7 @@ n_iters = 7
 n_steps = 1
 sub_tol = (2e-1,1e3)
 
-X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 51), np.linspace(-2.5, 2.5, 51))
+X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 21), np.linspace(-2.5, 2.5, 21))
 result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2],
                                  n_iters = n_iters, sub_tol = sub_tol, plot_steps=False,
                                  V = [V_0, V_1, V_2], m = m, gamma_f = 1,
@@ -121,4 +121,4 @@ n.set_ylabel(r'$\Im q_0$')
 
 #%%
 plt.tight_layout()
-plt.savefig('adaptive-sampling-example')
+# plt.savefig('adaptive-sampling-example')
