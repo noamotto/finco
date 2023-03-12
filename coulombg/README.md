@@ -1,16 +1,20 @@
-# FINCO
+# Propagating the 1D Coulomb ground state with FINCO
 
-An implementation of the FINCO method in 1D and some example useages
+Configuration and examples for propagation and reconstruction of the 1D Coulomb ground state with FINCO.
 
-## Structure of this repository
+## Structure of this folder
 
-This repository consists of two main parts:
+This repository consists of the following:
 
-1. The main library code, in the `finco/` folder
-2. Usage examples of three different systems:
-    - Harmonic oscillator reconstruction over time, in `harmonic-oscillator/`
-    - Quartic oscillator reconstruction at a specific time, in `quartic/`
-    - Coulomb ground state propagation and reconstruction, in `coulombg/`
+1. `coulombg.py` - A configuration script containing the system's parameters, a class determining the trajectories in time and additional utility functions.
+2. Several scripts for running propagation and analayzing it.
+    - `run_finco.py` - a prototype script for running the propagation on a predefined set of initial conditions.
+    - `run_finco_adaptive.py` - a script for running the propagation with adaptive sampling, and supporting command-line parameters to ease automation.
+    - `caustic_times.py` - a script for running the process of finding the times a trajectory meets a caustic, and supporting command-line parameters to ease automation.
+    - `analyze_results.py` - a prototype script for a general analysis of a single type of propagated trjaectories.
+    - `coulombg_{1/1.5/2/3}cycle_recon.py` - scripts for reconstruction for the Coulomb ground state at 1/1.5/2/3 periods of the ground state.
+3. Numerous scripts producing figures and examples of results.
+    - 
 
 In addition, a simplistic implementation of SPO is provided in `splitting_method.py`, which can be used for comparisons.
 
