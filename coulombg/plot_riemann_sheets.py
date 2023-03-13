@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Produces a figure showing the Reimann sheets for the real part of momentum as a
+function of time. It produces a 3D graph using mayavi2.
 
-This is a temporary script file.
+For a flat version, uncomment the lines under the comment "Flat version", comment
+those under "3D version", and comment the last cell. Note that the "flat version"
+is quite difficult to read.
 """
 
 #%% Setup
@@ -144,6 +147,8 @@ result1 = propagate(ics, V = V, m = m, gamma_f=1,
 # plt.scatter(np.real(trajs1.t), np.imag(trajs1.t), c=np.real(trajs1.p))
 # plt.colorbar()
 
+# 3D version
+
 parts = [0,20,60,80]
 trajs1 = result1.get_trajectories(start=100, end=400)
 for start, end in zip(parts[:-1], parts[1:]):
@@ -170,6 +175,8 @@ result2 = propagate(ics, V = V, m = m, gamma_f=1,
 # plt.title('q={}'.format(q))
 # plt.scatter(np.real(trajs2.t), np.imag(trajs2.t), c=np.real(trajs2.p))
 # plt.colorbar()
+
+# 3D version
 
 times = SecondPlaneTimeTrajectory(alphas=alphas).get_discontinuity_times()[4:] + [1]
 for start, end in zip(times[:-1], times[1:]):
