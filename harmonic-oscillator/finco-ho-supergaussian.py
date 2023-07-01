@@ -47,14 +47,17 @@ def V_2(q):
     return np.full_like(q,m * omega**2)
 
 class HOTimeTrajectory(TimeTrajectory):
+    def __init__(self, T = np.pi*2):
+        self.T = T
+        
     def init(self, ics):
         self.q0 = ics.q
         
     def t_0(self, tau):
-        return np.full_like(self.q0, 2*np.pi*tau)
+        return np.full_like(self.q0, self.T*tau)
     
     def t_1(self, tau):
-        return np.full_like(self.q0, 2*np.pi)
+        return np.full_like(self.q0, self.T)
     
     def get_discontinuity_times(self):
         return []
