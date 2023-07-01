@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
+File with miscellaneous sketches. Will probably be removed in future commits.
 """
 
 #%% Setup

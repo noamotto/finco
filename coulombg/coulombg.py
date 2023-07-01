@@ -1,8 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Configuration file for propagating the 1D Coulomb ground state using FINCO. It
+contains the system's parameters and functions for the potential and initial
+state, as well as a class for mapping between initial conditions and trajectories
+in time and functions for dealing with nonphysical contributions.
 
-This is a temporary script file.
+Remarks
+-------
+
+1. The coordinate q here is radial, hence the lacking of absolute values.
+2. The class for mapping between initial conditions and trajectories in time
+requires a parameter at construction. This is the number of poles to circumnavigate
+in time, or "order" of the system. It also allows to enter the final propagation
+time for the trajectories.
+3. The usage of the functions dealing with nonphysical contributions can be seen
+in various exploration and analysis scripts in this folder. Refer to `caustic_times.py`
+for usage of finding caustic times, and to `analyze_results.py` for an example of
+using locate_caustics() and eliminate_stokes().
 """
 
 #%% Setup
