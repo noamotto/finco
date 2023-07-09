@@ -443,7 +443,7 @@ class FINCOResults:
         neighbors = mesh.get_neighbors_value(results.q0)
 
         relative = (neighbors.q0 -
-                    results.q0.take(neighbors.index.get_level_values('point')).to_numpy())
+                     results.q0.take(mesh.points_to_mesh(neighbors.index.get_level_values('point'))).to_numpy())
         blocks = np.array_split(relative.index.get_level_values('point').unique().
                                 astype(int).to_numpy(), n_jobs)
         ranges = [relative.loc[b_[0]:b_[-1]] for b_ in blocks]

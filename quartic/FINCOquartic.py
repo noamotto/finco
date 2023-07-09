@@ -42,7 +42,8 @@ def V_2(q):
 
 class QuarticTimeTrajectory(TimeTrajectory):
     def init(self, ics):        
-        self.t = np.full_like(ics.q, 0.72)
+        # self.t = np.full_like(ics.q, 0.72)
+        self.t = np.full_like(ics.q, 2.)
         
     def t_0(self, tau):
         return self.t * tau
@@ -79,7 +80,7 @@ def eliminate_stokes(result):
     S_F = pd.Series(np.ones_like(proj.xi, dtype=np.float64), index=proj.q0.index)
     for (i, caustic) in caustics.iterrows():
         # idx = np.argmin(np.abs(proj.q0-caustic.q))
-        # caustic.q = proj.q0.iat[idx]
+        # caustic.q = proj.q[idx]
         # caustic.xi = proj.xi.iat[idx]
         S_F *= calc_factor2(caustic, proj.q0, proj.xi, proj.sigma)
     
@@ -87,13 +88,14 @@ def eliminate_stokes(result):
 
 #%%
 
-X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 199), np.linspace(-2.5, 2.5, 199))
+X, Y = np.meshgrid(np.linspace(-5, 5, 201), np.linspace(-5, 5, 201))
 qs = (X+1j*Y).flatten()
+gamma_f = 10
 
-result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=1), 
-                   V = [V_0, V_1, V_2], m = m, gamma_f=1, 
-                   time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1,
-                   blocksize=1024, n_jobs=5, verbose=True)
+result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=gamma_f), 
+                   V = [V_0, V_1, V_2], m = m, gamma_f=gamma_f, 
+                   time_traj = QuarticTimeTrajectory(), dt = 1e-4, drecord=1,
+                   blocksize=300, n_jobs=9, trajs_path=f'trajs_{gamma_f}.hdf', verbose=True)
 
 # x = np.arange(-12, 12, 1e-1)
 # finco.show_plots(x, -1e-3, 7, 0.02, 8)
@@ -106,16 +108,16 @@ import logging
 
 logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.DEBUG)
-n_iters = 20
+n_iters = 5
 n_steps = 1
 sub_tol = (2e-1,1e3)
 
-X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 51), np.linspace(-2.5, 2.5, 51))
+X, Y = np.meshgrid(np.linspace(-5, 5, 51), np.linspace(-5, 5, 51))
 result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2],
                                  n_iters = n_iters, sub_tol = sub_tol, plot_steps=True,
-                                 V = [V_0, V_1, V_2], m = m, gamma_f = 1,
-                                 time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1 / n_steps, 
-                                 n_jobs=3)
+                                 V = [V_0, V_1, V_2], m = m, gamma_f = 10, blocksize=100,
+                                 time_traj = QuarticTimeTrajectory(), dt = 1e-4, drecord=1 / n_steps, 
+                                 n_jobs=9)
          
 #%%
 fig, ax = plt.subplots()

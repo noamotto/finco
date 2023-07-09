@@ -153,7 +153,7 @@ def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: Optional[ArrayLike] =
     candidates = candidates[candidates.index.get_level_values(1) <
                             candidates.index.get_level_values(0)]
     candidates.q = (candidates.q.to_numpy() +
-                    qs.take(candidates.index.get_level_values(0)).to_numpy()) / 2
+                    qs.take(mesh.points_to_mesh(candidates.index.get_level_values(0))).to_numpy()) / 2
 
     return candidates
 
@@ -233,21 +233,22 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
 
     # Initial propagation
     ics = create_ics(q0 = np.array(qs).flatten(), S0 = S0, gamma_f = c.gamma_f)
-    mesh = Mesh(ics, adaptive=True)
-
-    candidate_inds = _get_candidates(mesh, ics.q)
 
     logger.info('Propagating initial grid of %d points', len(ics))
     result = propagate(ics, **kwargs)
     shutil.copy(c.trajs_path, os.path.join(step_dir, "step_0.hdf"))
+    
+    deriv = result.get_trajectories(n_steps)
+    mesh = Mesh(deriv, adaptive=True)
+
+    candidate_inds = _get_candidates(mesh, deriv.q)
 
     # Adaptive sampling iterations
     for i in range(n_iters):
         logger.info('Starting subsampling step %d/%d', i+1, n_iters)
 
-        deriv = result.get_trajectories(n_steps)
-        u = deriv.take(candidate_inds.index.get_level_values(1))
-        v = deriv.take(candidate_inds.index.get_level_values(0))
+        u = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values(1)))
+        v = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values(0)))
         E = _calc_E(u, v)
 
         to_subsample = (E > sub_tol[0]) & (E < sub_tol[1])
@@ -301,6 +302,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
                 _plot_step(mesh, deriv, candidate_inds)
 
             # Prepare next iteration candidates
+            deriv = result.get_trajectories(n_steps)
             new_qs = result.get_results(0,1).q
             old_inds = np.unique(candidate_inds.index.
                                  get_level_values(0)[to_subsample & ~inds_to_add])
