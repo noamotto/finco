@@ -35,5 +35,5 @@ spl = SplittingMethod(x0 = -50, x1 = 50, dx = 1e-2,
 
 spl.propagate()
    
-spl.show_plots(0.02)
+# spl.show_plots(0.02)
 # plt.plot(spl.x, np.abs(spl.psi))

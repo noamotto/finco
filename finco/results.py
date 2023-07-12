@@ -264,7 +264,7 @@ class FINCOResults:
 
             dataset = self.data[mask.astype(bool)]
 
-        return dataset
+        return dataset.sort_index()
 
     def get_trajectories(self, start: Optional[int] = None,
                          end: Optional[int] = None, threshold: int = -1) -> pd.DataFrame:

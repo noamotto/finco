@@ -88,14 +88,14 @@ def eliminate_stokes(result):
 
 #%%
 
-X, Y = np.meshgrid(np.linspace(-5, 5, 201), np.linspace(-5, 5, 201))
+X, Y = np.meshgrid(np.linspace(-5, 5, 301), np.linspace(-5, 5, 301))
 qs = (X+1j*Y).flatten()
-gamma_f = 10
+gamma_f = 1
 
 result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=gamma_f), 
                    V = [V_0, V_1, V_2], m = m, gamma_f=gamma_f, 
-                   time_traj = QuarticTimeTrajectory(), dt = 1e-4, drecord=1,
-                   blocksize=300, n_jobs=9, trajs_path=f'trajs_{gamma_f}.hdf', verbose=True)
+                   time_traj = QuarticTimeTrajectory(), dt = 3e-5, drecord=1,
+                   blocksize=300, n_jobs=3, trajs_path=f'trajs_{gamma_f}.hdf', verbose=True)
 
 # x = np.arange(-12, 12, 1e-1)
 # finco.show_plots(x, -1e-3, 7, 0.02, 8)
