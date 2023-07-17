@@ -25,8 +25,8 @@ def H_k(p):
     return p ** 2 / 2
 
 
-# T = 0.72
-T = 2
+T = 0.72
+# T = 2
 dt = T / 100
 spl = SplittingMethod(x0 = -50, x1 = 50, dx = 1e-2, 
                       T = T, dt = dt, trecord = dt, imag = False,
