@@ -5,14 +5,14 @@ Spyder Editor
 This is a temporary script file.
 """
 
+#%% Setup
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
 from finco import propagate, create_ics, TimeTrajectory
 from utils import tripcolor_complex
-
-#%% Setup
 
 import os
 

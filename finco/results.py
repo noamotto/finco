@@ -188,9 +188,15 @@ class FINCOResults:
 
         # System
         self.gamma_f = gamma_f
+        
+        self._populate_data()
 
+    def __len__(self):
+        return self.nrows
+        
     def __getattr__(self, name):
         try:
+            print(f"I was called with a name {name}")
             if self.file_path is not None:
                 with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
                     return file.get(key='results')[name]
@@ -207,6 +213,20 @@ class FINCOResults:
 
         return f"FINCO results dataset in memory with {self.data.size} entries"
 
+    def _populate_data(self):
+        if self.file_path is not None:
+            with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
+                desc = file.select(key='results', iterator=True, chunksize=1000)
+                self.nrows = desc.s.nrows
+                self.ncols = desc.s.ncols - len(desc.s.data_columns)
+                self.size = self.nrows * self.ncols
+                self.shape = (self.nrows, self.ncols)
+        else:
+            self.nrows = self.data.shape[0]
+            self.ncols = self.data.shape[1]
+            self.size = self.data.size
+            self.shape = (self.nrows, self.ncols)
+        
     def merge(self, other):
         """
         Merges two result datasets together. The user should make sure the are
@@ -222,6 +242,8 @@ class FINCOResults:
                 file.append(key='results', value=other.get_results())
         else:
             self.data.append(other.get_results())
+            
+        self._populate_data()
 
     def get_results(self, start: Optional[int] = None,
                     end: Optional[int] = None) -> pd.DataFrame:

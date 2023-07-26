@@ -41,9 +41,11 @@ def V_2(q):
     return 2*a + 12*b*q**2
 
 class QuarticTimeTrajectory(TimeTrajectory):
+    def __init__(self, T = 0.72):
+        self.T = T
+        
     def init(self, ics):        
-        self.t = np.full_like(ics.q, 0.72)
-        # self.t = np.full_like(ics.q, 2.)
+        self.t = np.full_like(ics.q, self.T)
         
     def t_0(self, tau):
         return self.t * tau
@@ -88,14 +90,16 @@ def eliminate_stokes(result):
 
 #%%
 
-X, Y = np.meshgrid(np.linspace(-6, 6, 301), np.linspace(-6, 6, 301))
+X, Y = np.meshgrid(np.linspace(-6, 6, 201), np.linspace(-6, 6, 201))
 qs = (X+1j*Y).flatten()
-gamma_f = 100
+gamma_f = 1
+n_steps = 100
+T = 2.
 
 result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=gamma_f), 
                    V = [V_0, V_1, V_2], m = m, gamma_f=gamma_f, 
-                   time_traj = QuarticTimeTrajectory(), dt = 1e-4, drecord=1,
-                   blocksize=300, n_jobs=6, trajs_path=f'trajs_{gamma_f}.hdf', verbose=True)
+                   time_traj = QuarticTimeTrajectory(T = T), dt = 3e-5, drecord=1/n_steps,
+                   blocksize=300, n_jobs=3, trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}.hdf', verbose=True)
 
 # x = np.arange(-12, 12, 1e-1)
 # finco.show_plots(x, -1e-3, 7, 0.02, 8)

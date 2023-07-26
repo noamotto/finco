@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from splitting_method import SplittingMethod
 
 def psi0(x):
-    return (2/np.pi)**0.25 * np.exp(-(x-1)**2)
+    return (2/np.pi)**0.25 * np.exp(-(x-1)**4)
 
 def H_p(x):
     return x**2 / 2
@@ -28,5 +28,5 @@ spl = SplittingMethod(x0 = -50, x1 = 50, dx = 1e-2,
 
 spl.propagate()
    
-spl.show_plots(0.02)
+# spl.show_plots(0.02)
 # plt.plot(spl.x, np.abs(spl.psi))
