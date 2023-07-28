@@ -44,7 +44,7 @@ class QuarticTimeTrajectory(TimeTrajectory):
     def __init__(self, T = 0.72):
         self.T = T
         
-    def init(self, ics):        
+    def init(self, ics):
         self.t = np.full_like(ics.q, self.T)
         
     def t_0(self, tau):
@@ -195,3 +195,17 @@ ts = caustic_times(result, quartic_caustic_times_dir, quartic_caustic_times_dist
                    V = [V_0, V_1, V_2], m = m, gamma_f=1, dt=1, drecord=1, 
                    n_jobs=3, blocksize=2**15,
                    verbose=False) 
+
+#%% Functions for my sketches
+from finco.bomca_interp import BomcaLinearInterpolator
+
+def get_q0s(step):
+    bomca = BomcaLinearInterpolator(result, step, 1)
+    return bomca(x, result.get_results(step, step + 1).q0)
+    
+def extract_params(res, gamma_f=1):
+    xi_1 = res.xi_1_abs * np.exp(1j * res.xi_1_angle)
+    M = np.array([[res.S_2, -np.ones_like(res.q)],
+                [np.full_like(res.q,2*gamma_f), np.full_like(res.q,-1j)]])
+    M_q, M_p = np.einsum('ijn,jn->in', np.linalg.pinv(M.T).T, [np.zeros_like(res.q), xi_1])
+    return xi_1, M_q, M_p
