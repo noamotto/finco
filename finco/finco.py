@@ -305,8 +305,10 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
                   [np.full_like(ics.q,2*gamma_f), np.full_like(ics.q,-1j/hbar)]])
     M_q, M_p = np.einsum('ijn,jn->in', np.linalg.pinv(M.T).T, [np.zeros_like(ics.q), xi_1_0])
 
-    # Parameter order: q, p, S, M_p, M_q
-    y0 = np.array([ics.q, ics.p, ics.S, M_p, M_q]).flatten()
+    # Parameter order: q, p, S, M_pp, M_pq, M_qp, M_qq
+    y0 = np.array([ics.q, ics.p, ics.S,
+                   np.ones_like(ics.q), np.zeros_like(ics.q),
+                   np.zeros_like(ics.q), np.ones_like(ics.q)]).flatten()
 
     ref_angle = ics.xi_1_angle
     time_traj.init(ics)
