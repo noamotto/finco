@@ -99,7 +99,7 @@ T = 2.
 result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=gamma_f), 
                    V = [V_0, V_1, V_2], m = m, gamma_f=gamma_f, 
                    time_traj = QuarticTimeTrajectory(T = T), dt = 3e-5, drecord=1/n_steps,
-                   blocksize=300, n_jobs=3, trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}.hdf', verbose=True)
+                   blocksize=200, n_jobs=3, trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}.hdf', verbose=True)
 
 # x = np.arange(-12, 12, 1e-1)
 # finco.show_plots(x, -1e-3, 7, 0.02, 8)

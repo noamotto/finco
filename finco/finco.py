@@ -93,14 +93,14 @@ def create_ics(q0: ArrayLike, S0: ArrayLike, gamma_f: float = 1,
 
         - q0 : Initial positions. complex
         - p0 : Initial momenta. complex
+        - S_20 : Initial value of second spatial derivative of S for each \
+                 trajectory. complex
         - q : Current positions (same as q0). complex
         - p : Current momenta (same as p0). complex
         - t : Current (initial) time for each trajectory. complex
         - S : Current (initial) value of S for each trajectory. complex
-        - S_2 : Current (initial) value of second spatial derivative of S for \
-                each trajectory. complex
-        - xi_1_abs : Current (initial) absolute value of the first derivative of xi w.r.t q0
-        - xi_1_abs : Current (initial) phase of the first derivative of xi w.r.t q0
+        - Mpp, Mpq, Mqp, Mqq : Current(initial) values of the stability matrix, \
+                               which is the identity matrix at t=0. complex
 
         and an index consisting of two fields:
 
@@ -112,14 +112,14 @@ def create_ics(q0: ArrayLike, S0: ArrayLike, gamma_f: float = 1,
     Ss = S0[0](q0)
     ps = S0[1](q0)
     Ss_2 = S0[2](q0)
-    xi_1 = 2*gamma_f - 1j / hbar * Ss_2
     t0 = t0 if t0 is not None else np.zeros_like(q0)
 
     index = pd.MultiIndex.from_product([np.arange(len(q0)), [0]],
                                        names=['t_index', 'timestep'])
-    return pd.DataFrame({'q0': q0, 'p0': ps, 'q': q0,
-                         'p': ps, 't': t0, 'S': Ss, 'S_2': Ss_2,
-                         'xi_1_abs': np.abs(xi_1), 'xi_1_angle': np.angle(xi_1)},
+    return pd.DataFrame({'q0': q0, 'p0': ps, 'S_20': Ss_2, 't': t0,
+                         'q': q0, 'p': ps, 'S': Ss,
+                         'Mpp': np.ones_like(q0), 'Mpq': np.zeros_like(q0),
+                         'Mqp': np.zeros_like(q0), 'Mqq': np.ones_like(q0)},
                         index = index)
 
 
@@ -300,17 +300,15 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
     """
     # Prepare for propagation and propagate
     # Calc M_p, M_q from S0_2, xi_1
-    xi_1_0 = ics.xi_1_abs * np.exp(1j * ics.xi_1_angle)
-    M = np.array([[ics.S_2, -np.ones_like(ics.q)],
-                  [np.full_like(ics.q,2*gamma_f), np.full_like(ics.q,-1j/hbar)]])
-    M_q, M_p = np.einsum('ijn,jn->in', np.linalg.pinv(M.T).T, [np.zeros_like(ics.q), xi_1_0])
+    # xi_1_0 = ics.xi_1_abs * np.exp(1j * ics.xi_1_angle)
+    # M = np.array([[ics.S_2, -np.ones_like(ics.q)],
+    #               [np.full_like(ics.q,2*gamma_f), np.full_like(ics.q,-1j/hbar)]])
+    # M_q, M_p = np.einsum('ijn,jn->in', np.linalg.pinv(M.T).T, [np.zeros_like(ics.q), xi_1_0])
 
     # Parameter order: q, p, S, M_pp, M_pq, M_qp, M_qq
-    y0 = np.array([ics.q, ics.p, ics.S,
-                   np.ones_like(ics.q), np.zeros_like(ics.q),
-                   np.zeros_like(ics.q), np.ones_like(ics.q)]).flatten()
+    y0 = np.concatenate([ics.q, ics.p, ics.S, ics.Mpp, ics.Mpq, ics.Mqp, ics.Mqq])
 
-    ref_angle = ics.xi_1_angle
+    # ref_angle = ics.xi_1_angle
     time_traj.init(ics)
     discont_times = time_traj.get_discontinuity_times()
     results = []
@@ -328,20 +326,20 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
         if res.status != 0:
             return None
 
-        xi_1_abs, xi_1_angle = calc_xis(res.sol, [t0] + list(t_eval) + [t1],
-                               gamma_f, ref_angle)
-        ref_angle = xi_1_angle[:,-1]
+        # xi_1_abs, xi_1_angle = calc_xis(res.sol, [t0] + list(t_eval) + [t1],
+        #                        gamma_f, ref_angle)
+        # ref_angle = xi_1_angle[:,-1]
 
         y0 = res.sol(t1)
         if len(t_eval) > 0:
-            result = res.y.reshape(5, -1, len(res.t))
-            S_2 = (result[3] / result[4])[np.newaxis,:]
+            result = res.y.reshape(7, -1, len(res.t))
+            # S_2 = (result[3] / result[4])[np.newaxis,:]
             t = np.array([time_traj.t_0(tau) for tau in res.t]).T[np.newaxis,:]
-            result[3], result[4] = xi_1_abs[:,1:-1], xi_1_angle[:,1:-1]
-            result = np.concatenate((t, result, S_2))
+            # result[3], result[4] = xi_1_abs[:,1:-1], xi_1_angle[:,1:-1]
+            result = np.concatenate((t, result))
             results.append(result)
 
-    return np.concatenate(results, axis=2).reshape(7, -1)
+    return np.concatenate(results, axis=2).reshape(8, -1)
 
 def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     """
@@ -391,19 +389,20 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
                     if result is None:
                         continue
 
-                    q0, p0 = block.q0, block.p0
-                    t, q, p, S, xi_1_abs, xi_1_angle, S_2 = result
+                    q0, p0, S_20 = block.q0, block.p0, block.S_20
+                    t, q, p, S, Mpp, Mpq, Mqp, Mqq = result
 
                     q0 = np.tile(q0, (Ts.size, 1)).T.flatten()
                     p0 = np.tile(p0, (Ts.size, 1)).T.flatten()
+                    S_20 = np.tile(S_20, (Ts.size, 1)).T.flatten()
 
                     index = pd.MultiIndex.from_product([block.index.get_level_values(0),
                                                         np.arange(Ts.size)],
                                                        names=['t_index','timestep'])
 
-                    res = pd.DataFrame({'q0': q0, 'p0': p0,
-                                        't': t, 'q': q, 'p': p, 'S': S, 'S_2': S_2,
-                                        'xi_1_abs': xi_1_abs, 'xi_1_angle': xi_1_angle},
+                    res = pd.DataFrame({'q0': q0, 'p0': p0, 'S_20': S_20, 't': t,
+                                         'q': q, 'p': p, 'S': S,
+                                         'Mpp': Mpp, 'Mpq': Mpq, 'Mqp': Mqp, 'Mqq': Mqq},
                                         index=index)
 
                     file.add_results(res)

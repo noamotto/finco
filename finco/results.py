@@ -16,6 +16,7 @@ using get_view().
 """
 
 import os
+import logging
 from typing import Union, Optional
 
 import numpy as np
@@ -102,7 +103,8 @@ def _calc_derivatives(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.S
     sigma_1 : pandas.Series of complex
         First defivative of sigma w.r.t. q0
     """
-    xi_1 = results.xi_1_abs * np.exp(results.xi_1_angle * 1j)
+    Z, Pz = results.Mqq + results.Mqp * results.S_20, results.Mpq + results.Mpp * results.S_20
+    xi_1 = 2 * gamma_f * Z - 1j / hbar * Pz
     sigma_1 = 1j / 2 / gamma_f / hbar * results.p * xi_1
     return xi_1, sigma_1
 
@@ -125,10 +127,11 @@ def _calc_pref(results: pd.DataFrame, gamma_f: float) -> pd.Series:
         at timestep
     """
     *_, sigma = _calc_projection(results, gamma_f)
+    xi_1, _ = _calc_derivatives(results, gamma_f)
 
-    pref = (results.xi_1_abs ** 1.5 *             # Jacobian's norm
-            np.exp(results.xi_1_angle * -0.5j) *  # Jacobian's angle
-            np.exp(sigma))                        # Sigma
+    pref = (np.abs(xi_1) ** 1.5 *             # Jacobian's norm
+            np.exp(np.angle(xi_1) * -0.5j) *  # Jacobian's angle
+            np.exp(sigma))                    # Sigma
 
     return pref
 
@@ -185,6 +188,7 @@ class FINCOResults:
         # Results
         self.file_path = file_path
         self.data = data
+        self.logger = logging.getLogger('finco.results.reader')
 
         # System
         self.gamma_f = gamma_f
@@ -196,7 +200,7 @@ class FINCOResults:
         
     def __getattr__(self, name):
         try:
-            print(f"I was called with a name {name}")
+            self.logger.debug('Looking for attibute %s', name)
             if self.file_path is not None:
                 with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
                     return file.get(key='results')[name]
@@ -204,6 +208,13 @@ class FINCOResults:
                 return self.data[name]
         except Exception as E:
             raise AttributeError(name) from E
+            
+    def __getstate__(self):
+        if self.file_path is not None:
+            with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
+                return file.get(key='results').__getstate__()
+        else:
+            return self.data.__getstate__()
 
     def __repr__(self):
         if self.file_path is not None:
