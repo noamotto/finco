@@ -204,8 +204,6 @@ def get_q0s(step):
     return bomca(x, result.get_results(step, step + 1).q0)
     
 def extract_params(res, gamma_f=1):
-    xi_1 = res.xi_1_abs * np.exp(1j * res.xi_1_angle)
-    M = np.array([[res.S_2, -np.ones_like(res.q)],
-                [np.full_like(res.q,2*gamma_f), np.full_like(res.q,-1j)]])
-    M_q, M_p = np.einsum('ijn,jn->in', np.linalg.pinv(M.T).T, [np.zeros_like(res.q), xi_1])
-    return xi_1, M_q, M_p
+    Z, Pz = res.Mqq + res.Mqp * res.S_20, res.Mpq + res.Mpp * res.S_20
+    xi_1 = 2 * gamma_f * Z - 1j * Pz
+    return xi_1, Z, Pz

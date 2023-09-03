@@ -14,12 +14,12 @@ import logging
 class BomcaLinearInterpolator:
     def __init__(self, results: FINCOResults, step: int, gamma_f: float):
         # Load all necessary data
-        self.results = results.get_results(step, step + 1)
-        self.simplices = Mesh(self.results).tri.simplices
+        res = results.get_results(step, step + 1)
+        self.simplices = Mesh(res).tri.simplices
         self.logger = logging.Logger('finco.bomca_interp')
         
         # Create values for calculation
-        q = np.reshape(self.results.q.take(self.simplices.flatten()), self.simplices.shape)
+        q = np.reshape(res.q.take(self.simplices.flatten()), self.simplices.shape)
         self.A = np.stack([np.ones_like(q), np.real(q), np.imag(q)], axis=1)
         
     
