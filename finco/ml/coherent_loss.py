@@ -10,7 +10,7 @@ import pandas as pd
 from finco.results import gf
 
 class CoherentLoss:
-    def __init__(self, qbins, pbins, gamma_f):
+    def __init__(self, qbins, pbins, gamma_f = 1, dy = 1e-3):
         self.qbins = qbins
         self.pbins = pbins
         self.gamma_f = gamma_f
@@ -29,17 +29,32 @@ class CoherentLoss:
         # Calculate ground truth foreach relevant bin
         qcenters = (self.qbins[:-1] + self.qbins[1:])/2
         pcenters = (self.pbins[:-1] + self.pbins[1:])/2
-        self.relevant = np.where(np.reshape([bool(i) for i in self.binned], 
+        relevant = np.where(np.reshape([bool(i) for i in self.binned], 
                                        (self.qbins.size - 1, self.pbins.size - 1)))
-        self.qs = qcenters[self.relevant[0]]
-        self.ps = pcenters[self.relevant[1]]
+        self.qs = qcenters[relevant[0]]
+        self.ps = pcenters[relevant[1]]
         gfs = gf(spl.x, self.qs, self.ps, self.gamma_f)
-        self.gt = np.trapz(np.conj(gfs) * spl.psis[100][1], spl.x, axis=1)
+        self.gt = np.trapz(np.conj(gfs) * spl.psis[-1][1], spl.x, axis=1)
 
-    def loss(self, factors, trajs, deriv):
-        vals = trajs.pref / np.abs(deriv.xi_1)**2 * factors
-        vals_binned = [vals.iloc[i].sum() for i in self.binned[self.relevant]]
-        loss = np.sum(np.abs(vals_binned - self.gt))
+    def forward(self, factors, trajs, deriv):
+        relevant = np.where([bool(i) for i in self.binned])[0]
+        vals = np.nan_to_num(trajs.pref) / np.abs(deriv.xi_1)**2 * factors
+        vals_binned = [vals.iloc[self.binned[i]].sum() for i in relevant]
+        self.loss = np.sum(np.abs(vals_binned - self.gt)**2)
         
-        return loss
+        return self.loss
     
+    def backward(self, factors, trajs, deriv):
+        # Find the bin for each trajectory
+        bins = np.full(len(trajs), -1)
+        relevant = np.where([bool(i) for i in self.binned])[0]
+        for i,b in enumerate(relevant):
+            bins[self.binned[relevant[i]]] = i
+        
+        # Calculate necessary quantities
+        vals = np.nan_to_num(trajs.pref) / np.abs(deriv.xi_1)**2 * factors
+        vals_binned = [(vals * factors).iloc[self.binned[i]].sum() for i in relevant] - self.gt
+        
+        inter = vals*np.conj(vals_binned.take(bins))
+        return (inter + np.conj(inter)) * (bins != -1)
+        

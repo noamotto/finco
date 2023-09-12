@@ -48,7 +48,7 @@ class BomcaLinearInterpolator:
         # Calculate values for interpolation and locate points in simplices
         B = np.stack([np.ones_like(x),x,np.zeros_like(x)], axis=0)
         lambdas = np.linalg.pinv(self.A) @ B
-        vals = np.reshape(np.take(val, self.simplices.flatten()), self.simplices.shape)
+        vals = np.reshape(val.take(self.simplices.flatten()), self.simplices.shape)
         mask = np.all(lambdas >= 0,axis=1)
         ys = np.einsum('tnx,tn->tx', lambdas, vals)
         return [y[m] for y, m in zip(ys.T, mask.T)]

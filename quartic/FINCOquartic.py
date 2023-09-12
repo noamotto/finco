@@ -198,6 +198,8 @@ ts = caustic_times(result, quartic_caustic_times_dir, quartic_caustic_times_dist
 
 #%% Functions for my sketches
 from finco.bomca_interp import BomcaLinearInterpolator
+from itertools import chain
+from copy import deepcopy
 
 def get_q0s(step):
     bomca = BomcaLinearInterpolator(result, step, 1)
@@ -207,3 +209,41 @@ def extract_params(res, gamma_f=1):
     Z, Pz = res.Mqq + res.Mqp * res.S_20, res.Mpq + res.Mpp * res.S_20
     xi_1 = 2 * gamma_f * Z - 1j * Pz
     return xi_1, Z, Pz
+
+def process(A,B,S,v,mask,ablocks=1, bblocks=1):
+    def _process(inv,b,s,v,m):
+        lam = inv @ b
+        vals = np.reshape(v.take(s.flatten()), s.shape)
+        mask = np.all(lam >= 0,axis=1) & m[:,np.newaxis]
+        ys = np.einsum('tnx,tn->tx', lam, vals)
+        return [y[m] for y, m in zip(ys.T, mask.T)]
+    
+    As, Bs = np.array_split(A,ablocks,axis=0), np.array_split(B,bblocks,axis=1)
+    Ss, Ms = np.array_split(S, ablocks, axis=0), np.array_split(mask, ablocks)
+    
+    res = []
+    for a,s,m in zip(As, Ss, Ms):
+        inv = np.linalg.pinv(a)
+        res.append(list(chain(*[_process(inv,b,s,v,m) for b in Bs])))
+    
+    return [np.concatenate([r[i] for r in res]) for i in range(len(res[0]))]
+    
+
+def find_branches(q0s):
+    q0s = deepcopy(q0s)
+    bs = []
+    n = np.min([len(n) for n in q0s])
+    
+    for i in range(n):
+        cur = q0s[0][i]
+        q0s[0][i] = np.nan
+        br = [i]
+        for t in q0s[1:]:
+            idx = np.nanargmin(np.abs(cur - t))
+            cur = t[idx]
+            t[idx] = np.nan
+            br.append(idx)
+        bs.append(br)
+    
+    return bs
+
