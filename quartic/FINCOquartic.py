@@ -230,7 +230,10 @@ def process(A,B,S,v,mask,ablocks=1, bblocks=1):
     
 
 def find_branches(q0s):
-    q0s = deepcopy(q0s)
+    q0s = np.reshape(np.array(deepcopy(q0s), dtype=object), X.shape)
+    q0s[1::2] = q0s[1::2, ::-1]
+    q0s = list(q0s.ravel())
+    
     bs = []
     n = np.min([len(n) for n in q0s])
     
@@ -245,5 +248,7 @@ def find_branches(q0s):
             br.append(idx)
         bs.append(br)
     
-    return bs
+    bs = np.reshape(bs, (-1,) + X.shape)
+    bs[:,1::2] = bs[:,1::2,::-1]
+    return list(bs.reshape(bs.shape[0], -1))
 
