@@ -24,17 +24,17 @@ class CoherentLoss(nn.Module):
         
     def forward(self, factors, trajs):
         # perform binning based on the given results
-        qf, pf, _ = _calc_proj(trajs, self.gamma_f)
+        qf, pf, _ = _calc_proj(trajs.cpu(), self.gamma_f)
         
         dq, dp = (self.qmax - self.qmin) / self.qbins, (self.pmax - self.pmin) / self.pbins
         
         qbins = ((qf - self.qmin) / dq).floor()
         pbins = ((pf - self.pmin) / dp).floor()
-        bins = qbins * self.pbins + pbins
+        bins = (qbins * self.pbins + pbins)
         
         # Keep a list of bins for forward pass
         inds_dict = {int(k): int(v) for v,k in enumerate(torch.unique(bins))}
-        inds = bins.clone().map_(bins, lambda i,x: inds_dict[int(i)]).long()
+        inds = bins.map_(bins, lambda i,x: inds_dict[int(i)]).long().to(factors.device)
         
         # Calculate ground truth for each relevant bin
         qcenters = (qbins + 0.5) * dq + self.qmin
