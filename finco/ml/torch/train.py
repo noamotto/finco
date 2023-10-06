@@ -45,6 +45,7 @@ spl.propagate()
 #%% Train
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f'using device {device}')
 lr = 1e-3
 epochs = 250
 
@@ -57,6 +58,7 @@ loss = CoherentLoss(-5, 5, 1000, -5, 5, 100, spl)
 optim = torch.optim.SGD(model.parameters(), lr=lr)
 
 model.to(device=device)
+loss.to(device=device)
 for epoch in range(epochs):
     print(f'Epoch {epoch+1} -----------------------')
     for batch, x in enumerate(loader):

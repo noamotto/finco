@@ -5,6 +5,31 @@ Implementation of FINCO functions in PyTorch
 
 import torch
 
+def _gf(x, qf, pf, gamma_f):
+    """
+    Utility function. Reconstructs a Gaussian from given parameters.
+
+    Parameters
+    ----------
+    x : 1D ArrayLike of floats
+        x positions to reconstruct the Gaussian for.
+    qf : float
+        Gaussian's center.
+    pf : float
+        Gaussian's momentum.
+    gamma_f : float
+        Gaussian width.
+
+    Returns
+    -------
+    psi : 1D Array like in the shape of x
+        The reconstructed Gaussian.
+
+    """
+    X, Qf = torch.meshgrid(x, qf)
+    Pf = pf.unsqueeze(0)
+    return (2*gamma_f / torch.pi) ** 0.25 * torch.exp(-gamma_f*(X-Qf)**2 + 1j * Pf * (X-Qf))
+
 def _calc_proj(x, gamma_f):
     """
     Calculates the projection parameters of given trajectories.

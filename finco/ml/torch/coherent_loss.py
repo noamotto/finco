@@ -6,8 +6,9 @@ PyTorch implementation of loss function based on coherent states.
 import torch
 from torch import nn
 
-from ._utils import _calc_proj, _calc_pref
-from ...results import gf
+import numpy as np
+
+from ._utils import _calc_proj, _calc_pref, _gf
 
 class CoherentLoss(nn.Module):
     def __init__(self, qmin, qmax, qbins, pmin, pmax, pbins, spl, gamma_f = 1):
@@ -21,6 +22,13 @@ class CoherentLoss(nn.Module):
         self.pbins = pbins
         self.spl = spl
         self.gamma_f = gamma_f
+        
+        # Create a tensor for x based on the given windows
+        maxp = torch.max(torch.abs(torch.tensor([pmin, pmax])))
+        x = np.arange(qmin - 4/gamma_f, qmax + 4/gamma_f + .1/maxp, .1/maxp)
+        psi = np.interp(x, spl.x, self.spl.psis[-1][1])
+        self.register_buffer("x",  torch.from_numpy(x))
+        self.register_buffer("psi",  torch.from_numpy(psi))
         
     def forward(self, factors, trajs):
         # perform binning based on the given results
@@ -37,12 +45,11 @@ class CoherentLoss(nn.Module):
         inds = bins.map_(bins, lambda i,x: inds_dict[int(i)]).long().to(factors.device)
         
         # Calculate ground truth for each relevant bin
-        qcenters = (qbins + 0.5) * dq + self.qmin
-        pcenters = (pbins + 0.5) * dp + self.pmin
+        qcenters = ((qbins + 0.5) * dq + self.qmin).to(device=factors.device, dtype=self.x.dtype)
+        pcenters = ((pbins + 0.5) * dp + self.pmin).to(device=factors.device, dtype=self.x.dtype)
 
-        gfs = torch.from_numpy(gf(self.spl.x, qcenters, pcenters, self.gamma_f))
-        gt = torch.trapz(torch.conj(gfs) * torch.from_numpy(self.spl.psis[-1][1]),
-                         torch.from_numpy(self.spl.x), axis=1).to(factors.device)
+        gfs = _gf(self.x, qcenters.flatten(), pcenters.flatten(), self.gamma_f)
+        gt = torch.trapz(torch.conj(gfs) * self.psi.unsqueeze(-1), self.x, axis=0)
 
         # Calculate estimation based on factors and calculate loss
         pref = _calc_pref(trajs, self.gamma_f).to(factors.device)
