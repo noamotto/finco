@@ -197,6 +197,7 @@ ts = caustic_times(result, quartic_caustic_times_dir, quartic_caustic_times_dist
                    verbose=False) 
 
 #%% Functions for my sketches
+from finco import Mesh
 from finco.bomca_interp import BomcaLinearInterpolator
 from itertools import chain
 from copy import deepcopy
@@ -210,6 +211,13 @@ def extract_params(res, gamma_f=1):
     xi_1 = 2 * gamma_f * Z - 1j * Pz
     return xi_1, Z, Pz
 
+def prepare(result, qsamples):
+    mesh = Mesh(result)
+    qs = np.reshape(result.q.take(mesh.tri.simplices.flatten()), mesh.tri.simplices.shape)
+    A = np.stack((np.ones(qs.shape), np.real(qs), np.imag(qs)), axis=1)
+    B = np.stack((np.ones(qsamples.size), qsamples.real, qsamples.imag), axis=0)
+    return A, B, mesh.tri.simplices
+    
 def process(A,B,S,v,mask,ablocks=1, bblocks=1):
     def _process(inv,b,s,v,m):
         lam = inv @ b

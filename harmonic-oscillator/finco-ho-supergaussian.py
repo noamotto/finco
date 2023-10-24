@@ -70,12 +70,12 @@ def locate_caustics_analytic(t):
 
 #%% Run
 
-X, Y = np.meshgrid(np.linspace(-2, 4, 121), np.linspace(-3, 3, 121))
+X, Y = np.meshgrid(np.linspace(-2, 4, 241), np.linspace(-3, 3, 241))
 
 ics = create_ics(q0 = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2], gamma_f = gamma_f)
 
 result = propagate(ics, V = [V_0, V_1, V_2], m = m, gamma_f = gamma_f,
-                   time_traj = HOTimeTrajectory(T=2*np.pi), dt = 1e-3, drecord=1/100, n_jobs=3,
+                   time_traj = HOTimeTrajectory(T=2*np.pi), dt = 1e-3, drecord=1/100, n_jobs=6,
                    trajs_path=None)
 
 _, ax = plt.subplots(nrows=1, ncols=4, num='caustics-ho-supergaussian', figsize=(16,4))

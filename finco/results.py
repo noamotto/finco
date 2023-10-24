@@ -252,7 +252,7 @@ class FINCOResults:
             with pd.HDFStore(path=self.file_path, mode='a', complevel=5) as file:
                 file.append(key='results', value=other.get_results())
         else:
-            self.data.append(other.get_results())
+            self.data = pd.concat((self.data, other.get_results()))
             
         self._populate_data()
 
@@ -521,6 +521,34 @@ class FINCOResults:
             if not i % skip:
                 psi.set_ydata(np.abs(self.reconstruct_psi(x, i+1, threshold)))
                 plt.draw()
+                
+    def save(self, file_path: str):
+        """
+        Saves an in-memory FINCO results dataset into file
+
+        Parameters
+        ----------
+        file_path : str
+            Path to save the FINCO results file in.
+
+        Raises
+        ------
+        ValueError
+            Raised if the FINCO results dataset is not in-memory.
+
+        Returns
+        -------
+        results: FINCOResults
+            New FINCO results dataset object with the data in-file.
+
+        """
+        if self.data is None:
+            raise ValueError('This FINCO results dataset is already in file')
+        
+        with FINCOWriter(file_path) as writer:
+            writer.add_results(self.data)
+        
+        return load_results(file_path, self.gamma_f)
 
 
 def load_results(file_path: str, gamma_f: float = 1) -> FINCOResults:
