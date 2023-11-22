@@ -127,8 +127,8 @@ def complex_to_rgb(c: ArrayLike, absmin: float = 0, absmax: float = np.inf):
     abs_c[abs_c < absmin] = absmin
     abs_c[abs_c > absmax] = absmax
     abs_c = np.log10(abs_c + 1e-10)
-    abs_c -= np.min(abs_c[mask])
-    abs_c /= np.max(abs_c[mask])
+    abs_c -= np.min(abs_c)
+    abs_c /= np.max(abs_c)
     rgb = hsv_to_rgb(np.stack((angle_c / 2 / np.pi + 0.5,
                                np.ones_like(abs_c),
                                abs_c), axis=-1))
