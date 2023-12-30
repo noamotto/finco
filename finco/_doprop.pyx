@@ -18,13 +18,13 @@ cdef _actual_stuff(complex[:] q, complex[:] p,
     cdef Py_ssize_t i
 
     for i in range(n):
-        res_view[i] = p[i] / m * t_1[i]
-        res_view[i + n] = -V_1[i] * t_1[i]
-        res_view[i + 2*n] = (p[i] ** 2 / (2 * m) - V_0[i]) * t_1[i]
-        res_view[i + 3*n] = -V_2[i] * M_qp[i] * t_1[i]
-        res_view[i + 4*n] = -V_2[i] * M_qq[i] * t_1[i]
-        res_view[i + 5*n] = M_pp[i] / m * t_1[i]
-        res_view[i + 6*n] = M_pq[i] / m * t_1[i]
+        res_view[i] = p[i] / m * t_1[i]                                 # dq/dtau = p/m * dt/dtau
+        res_view[i + n] = -V_1[i] * t_1[i]                              # dp/dtau = -V_1(q) * dt/dtau
+        res_view[i + 2*n] = (p[i] ** 2 / (2 * m) - V_0[i]) * t_1[i]     # dS/dtau = (p^2/2m - V) * dt/dtau
+        res_view[i + 3*n] = -V_2[i] * M_qp[i] * t_1[i]                  # dMpp/dtau = -V_2(q) * Mqp * dt/dtau
+        res_view[i + 4*n] = -V_2[i] * M_qq[i] * t_1[i]                  # dMpq/dtau = -V_2(q) * Mqq * dt/dtau
+        res_view[i + 5*n] = M_pp[i] / m * t_1[i]                        # dMqp/dtau = Mpp / m * dt/dtau
+        res_view[i + 6*n] = M_pq[i] / m * t_1[i]                        # dMqq/dtau = Mpq / m * dt/dtau
     
     return res
 

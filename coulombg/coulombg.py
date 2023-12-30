@@ -70,10 +70,8 @@ S0 = [S0_0, S0_1, S0_2]
 
 def coulombg_pole(q0, p0, n=0):
     E0 = p0**2/2/m - 1/q0
-    sign = np.ones_like(E0)
-    sign[np.imag(E0) < 0] *= -1
-    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*p0*q0*sign + 2*E0*q0 + 1)
-                                        + n*1j*np.pi*2)/2/E0**1.5/sign)
+    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*p0*q0 + 2*E0*q0 + 1)
+                                        + n*1j*np.pi*2)/2/E0**1.5)
 
 def coulombg_diff(q0, p0):
     return coulombg_pole(q0, p0, n=1) - coulombg_pole(q0, p0, n=0)
@@ -89,13 +87,30 @@ class CoulombGTimeTrajectory(TimeTrajectory):
             self.t = t
 
     def init(self, ics):
-        # Calc Radii of circles
+        # Calc trajectory parameters
         q0, p0, t0 = ics.q0.to_numpy(), ics.p0.to_numpy(), ics.t.to_numpy()
-        diff = coulombg_diff(q0, p0)
-        self.r = np.array(-diff / 2)
+        
+        # Calc the 2 directions for the trajectory
+        # r: in the direction of the poles line, towards positive time
+        #   with length of the circle's radius
+        # u: perpendicular to r, with the same length, in the direction
+        #   pointing to the poles line from the origin
+        self.r = np.array(-coulombg_diff(q0, p0)) / 2
+        self.r *= np.sign(self.r.real)
+        self.u = (coulombg_pole(q0, p0, n=0) - 
+                  (np.real(coulombg_pole(q0, p0, n=0)*self.r.conj()) * self.r /
+                   np.abs(self.r)**2))
+        self.u *= np.abs(self.r) / np.abs(self.u)
+        
+        # Calc whether u points "above" the poles line or "below". Needed to
+        # calculate the circle's entry point and to calculate which trajectories
+        # need additional rotation.
+        self.dir = np.sign((self.u*self.r.conj()).imag)
         self.first = np.zeros(q0.shape)
+        # self.first[(q0.real < 0) & (self.dir < 0)] -= 1
+        
 
-        # Calc points of interest on the trajectory
+        # Calc points of reference on the trajectory
 
         # t0: Initial point
         t0 = t0 if t0 is not None else np.zeros_like(q0)
@@ -103,60 +118,52 @@ class CoulombGTimeTrajectory(TimeTrajectory):
         # t1: Final point
         t1 = self.t(q0, p0)
 
-        # a: Point of entrance to the poles line.
-        self.a = np.array((coulombg_pole(q0, p0, n=0) + coulombg_pole(q0, p0, n=1)) / 2)
-        self.a[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] += self.r[(np.imag(q0) <= 0) & (np.real(q0) >= 0)] *2
-        # self.a -= self.r *2
-        # self.first[q0.real < 0] -= 1
+        # a: Point starting to circle poles
+        self.nfirst = np.zeros(q0.shape)
+        self.nfirst[(q0.imag < 0) & (q0.real > -1)] += 2 * (self.dir[(q0.imag < 0) & (q0.real > -1)] > 0) - 1
+        self.a = coulombg_pole(q0, p0, n=self.nfirst) - self.u
+        # self.a[q0.imag < 0] -= self.r *2
 
         # b: Point of exit from the poles line
-        self.b = self.a + 2*self.n*self.r
-        
-        # c: Point for enough from ploes line, towards the ending position
-        self.c = np.array([self.b - self.r * 1j, self.b + self.r * 1j])
-        close = np.argmin(np.abs(self.c - t1)[:,np.newaxis], axis=0)
-        self.c = np.take_along_axis(self.c, close, axis=0).squeeze()
+        self.b = self.a + ((self.n - 1) * 2)*self.r
 
         # Build path
         self.path = []
         self.discont_times = []
         if self.n==0:
-            self.discont_times = [1/2, 3/4]
+            self.discont_times = [1/2]
 
             self.path.append(LineTraj(t0=0, t1=1/2, a=t0, b=self.a))
-            self.path.append(LineTraj(t0=1/2, t1=3/4, a=self.b, b=self.c))
-            self.path.append(LineTraj(t0=3/4, t1=1, a=self.c, b=t1))
+            self.path.append(LineTraj(t0=1/2, t1=1, a=self.a, b=t1))
 
         elif self.n==1:
-            self.discont_times = [1/3, 2/3, 5/6]
+            self.discont_times = [1/3, 2/3]
 
             self.path.append(LineTraj(t0=0, t1=1/3, a=t0, b=self.a))
             self.path.append(CircleTraj(t0=1/3, t1=2/3, a=self.a, r=self.r,
-                                        turns=-1.5 + self.first, phi0=np.pi))
-            self.path.append(LineTraj(t0=2/3, t1=5/6, a = self.b, b=self.c))
-            self.path.append(LineTraj(t0=5/6, t1=1, a = self.c, b=t1))
+                                        turns=1 + self.first, phi0=-np.pi/2*self.dir))
+            self.path.append(LineTraj(t0=2/3, t1=1, a = self.a, b=t1))
 
         else:
-            Ts = list(np.linspace(1/(2*self.n+1), 1-1/(2*self.n+1), 2*self.n)) + [1-1/(2*self.n+1)/2]
+            Ts = list(np.linspace(1/(2*self.n+1), 1-1/(2*self.n+1), 2*self.n))
             self.discont_times = Ts
 
             self.path.append(LineTraj(t0=0, t1=Ts[0], a=t0, b=self.a))
             self.path.append(CircleTraj(t0=Ts[0], t1=Ts[1], a=self.a, r=self.r,
-                                        turns=-1.25 + self.first, phi0=np.pi))
+                                        turns=1 + self.first, phi0=-np.pi/2*self.dir))
             self.path.append(LineTraj(t0=Ts[1], t1=Ts[2],
-                                      a=self.a + (1+1j)*self.r, b=self.a + (3+1j)*self.r))
+                                      a=self.a, b=self.a + 2*self.r))
 
             for i in range(self.n-2):
-                a = self.a + (2*i+3+1j)*self.r
+                a = self.a + 2*(i+1)*self.r
                 self.path.append(CircleTraj(t0=Ts[2*i+2], t1=Ts[2*i+3],
-                                            a=a, r=self.r, turns=-1, phi0=np.pi/2))
-                self.path.append(LineTraj(t0=Ts[2*i+3], t1=Ts[2*i+4], a=a, b=a+2*self.r))
+                                            a=a, r=self.r, turns=1, phi0=-np.pi/2*self.dir))
+                self.path.append(LineTraj(t0=Ts[2*i+3], t1=Ts[2*i+4], a=a, b=a + 2*self.r))
 
-            self.path.append(CircleTraj(t0=Ts[-3], t1=Ts[-2],
-                                        a=self.a + (2*self.n-1+1j)*self.r, r=self.r,
-                                        turns=-1.25, phi0=np.pi/2))
-            self.path.append(LineTraj(t0=Ts[-2], t1=Ts[-1], a=self.b, b=self.c))
-            self.path.append(LineTraj(t0=Ts[-1], t1=1, a=self.c, b=t1))
+            self.path.append(CircleTraj(t0=Ts[-2], t1=Ts[-1],
+                                        a=self.b, r=self.r,
+                                        turns=1, phi0=-np.pi/2*self.dir))
+            self.path.append(LineTraj(t0=Ts[-1], t1=1, a=self.b, b=t1))
 
         return self
 

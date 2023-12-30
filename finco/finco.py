@@ -407,10 +407,10 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
 
                     file.add_results(res)
 
-        if file.results_file is not None:
-            return load_results(conf.trajs_path, conf.gamma_f)
+    if conf.trajs_path is not None:
+        return load_results(conf.trajs_path, conf.gamma_f)
 
-        return results_from_data(file.data, conf.gamma_f)
+    return results_from_data(file.data, conf.gamma_f)
 
 def continue_propagation(results: FINCOResults, **kwargs) -> FINCOResults:
     """

@@ -125,7 +125,7 @@ class CircleTraj(TimeTrajectory):
         Initial phase on the circle.
     """
     def __init__(self, t0: float, t1: float, a: ArrayLike, r: ArrayLike,
-                 turns: Union[float, ArrayLike], phi0: float):
+                 turns: Union[float, ArrayLike], phi0:  Union[float, ArrayLike]):
         self.t0 = t0
         self.t1 = t1
         self.a = a

@@ -76,7 +76,7 @@ except FileExistsError:
     pass 
 
 #%% Propagate
-X, Y = np.meshgrid(np.linspace(-2.5, 1, 351), np.linspace(-2.5, 1, 351))
+X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 501), np.linspace(-2.5, 2.5, 501))
 qs = (X+1j*Y).flatten()
 
 result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=1), 
@@ -128,9 +128,10 @@ dists = np.angle(F.v_t)[:,np.newaxis] - phis[np.newaxis,:]
 dists = np.min(np.abs(np.stack([dists - 2*np.pi, dists, dists + 2*np.pi])), axis=0)
 
 for i in range(3):
+    mask = (dists[:, i] < 1e-2) | (dists[:, i+3] < 1e-2)
     # Remove incorrect line in top-right corner that messes up with illustration.
-    mask = ((dists[:, i] < 1e-2) | (dists[:, i+3] < 1e-2) & 
-            ((np.real(proj.q0) < 1) | (np.imag(proj.q0) < 1)))
+    # mask = ((dists[:, i] < 1e-2) | (dists[:, i+3] < 1e-2) & 
+    #         ((np.real(proj.q0) < 1) | (np.imag(proj.q0) < 1)))
     
     v_t_dists = pd.Series((np.real(F.v_t[mask])*20).astype(int)/20, index=F[mask].index)
     a_lines.append(proj.q0[mask].groupby(by = lambda x: v_t_dists.loc[x]).mean())
@@ -160,9 +161,56 @@ plt.gca().add_collection(col)
 plt.gca().autoscale_view()
 
 #%% Image finalization
-plt.xlim(-2.5,1)
+plt.xlim(-2.5,2.5)
 plt.xlabel(r'$\Re q_0$')
-plt.ylim(-2.5,1)
+plt.ylim(-2.5,2.5)
 plt.ylabel(r'$\Im q_0$')
 plt.tight_layout()
-plt.savefig('caustics-exploration/caustics-illustration.png')
+# plt.savefig('caustics-exploration/caustics-illustration.png')
+
+#%% Iterative stokes line
+from joblib import Parallel, delayed
+dq = 1e-2
+
+def do_step(result, prev):
+    proj = result.get_projection_map(1)
+    deriv = result.get_caustics_map(1)
+    # print(f'dxi: {(proj.xi.loc[1] - proj.xi.loc[0]).to_numpy()}')
+    # print(f'dsigma: {(proj.sigma.loc[1] - proj.sigma.loc[0]).to_numpy()}')
+    # print(f'dq0: {(proj.q0.loc[1] - proj.q0.loc[0]).to_numpy()}')
+    F1 = deriv.sigma_1.loc[0] - deriv.sigma_1.loc[1] * deriv.xi_1.loc[0] / deriv.xi_1.loc[1]
+    phi1 = np.array([np.pi / 2, -np.pi / 2]) - np.angle(F1)
+    phi1 = phi1[np.argmax(np.abs(proj.q0.to_numpy()[0]+dq*np.exp(1j*phi1) - prev[0]))]
+    dq1 = dq * np.exp(1j *phi1)
+    dq2 = (deriv.xi_1.loc[0] / deriv.xi_1.loc[1] * dq1)[1]
+    dq1 *= dq / np.max(np.abs([dq1, dq2]))
+    dq2 *= dq / np.max(np.abs([dq1, dq2]))
+    return create_ics(np.concatenate([proj.q0.loc[0] + dq1,
+                                      proj.q0.loc[1] + dq2]), S0 = [S0_0, S0_1, S0_2], gamma_f=1)
+    
+
+def iterative_stokes(n, phi, q):
+    ics = create_ics([q + dq*np.exp(1j*phi), 
+                      q - dq*np.exp(1j*phi)], S0 = [S0_0, S0_1, S0_2], gamma_f=1)
+    
+    prev = np.array([q, q])
+    cur = propagate(ics, 
+                    V = [V_0, V_1, V_2], m = m, gamma_f=1, 
+                    time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1,
+                    blocksize=1024, n_jobs=5, verbose=False, trajs_path=None)
+    qs = np.concatenate([[caustic.q], cur.q0.loc[:, 1]])
+    
+    for i in range(n):
+        # print(f'iteration {i+1}')
+        next_ics = do_step(cur, prev)
+        prev = cur.q0[:,1].to_numpy()
+        cur = propagate(next_ics, 
+                        V = [V_0, V_1, V_2], m = m, gamma_f=1, 
+                        time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1,
+                        blocksize=1024, n_jobs=5, verbose=False, trajs_path=None)
+        if i % 5 == 0:
+            qs = np.concatenate([qs, cur.q0.loc[:, 1]])
+    
+    return qs
+
+qss = Parallel(verbose=10, n_jobs=3)(delayed(iterative_stokes)(n=550, phi=phis[i], q=caustics.loc[0].q) for i in range(3))

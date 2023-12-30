@@ -16,6 +16,7 @@ from utils import tripcolor_complex
  
 
 # System params
+hbar = 0.1
 m = 1
 chi = 2j
 gamma0 = 0.5
@@ -23,13 +24,14 @@ a = 0.5
 b = 0.1
 
 def S0_0(q):
-    return -1j*(-gamma0 * (q-np.conj(chi)/2/gamma0)**2-(chi.imag)**2/4/gamma0 + 0.25*np.log(2*gamma0/np.pi))
+    return -1j*(-gamma0 * (q-np.conj(chi)/2/gamma0)**2 -
+                (chi.imag)**2/4/gamma0 + 0.25*np.log(2*gamma0/np.pi))*hbar
     
 def S0_1(q):
-    return -1j*(-2*gamma0 * (q-np.conj(chi)/2/gamma0))
+    return -1j*(-2*gamma0 * (q-np.conj(chi)/2/gamma0))*hbar
 
 def S0_2(q):
-    return np.full_like(q, 2j*gamma0)
+    return np.full_like(q, 2j*gamma0)*hbar
 
 def V_0(q):
     return a*q**2 + b*q**4
@@ -99,7 +101,8 @@ T = 2.
 result = propagate(create_ics(qs, S0 = [S0_0, S0_1, S0_2], gamma_f=gamma_f), 
                    V = [V_0, V_1, V_2], m = m, gamma_f=gamma_f, 
                    time_traj = QuarticTimeTrajectory(T = T), dt = 3e-5, drecord=1/n_steps,
-                   blocksize=200, n_jobs=3, trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}.hdf', verbose=True)
+                   blocksize=200, n_jobs=3,
+                   trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}_hbar_{hbar}.hdf', verbose=True)
 
 # x = np.arange(-12, 12, 1e-1)
 # finco.show_plots(x, -1e-3, 7, 0.02, 8)
@@ -236,8 +239,42 @@ def process(A,B,S,v,mask,ablocks=1, bblocks=1):
     
     return [np.concatenate([r[i] for r in res]) for i in range(len(res[0]))]
     
-
 def find_branches(q0s):
+    q0s = deepcopy(q0s)
+    bs = []
+    n = np.min([len(n) for n in q0s])
+    idx = np.argmin([len(n) for n in q0s])
+    
+    for i in range(n):
+        first = q0s[idx][i]
+        q0s[idx][i] = np.nan
+        br = [i]
+    
+        if idx > 0:
+            cur = first
+            for t in q0s[idx-1::-1]:
+                idx_ = np.nanargmin(np.abs(cur - t))
+                cur = t[idx_]
+                t[idx_] = np.nan
+                br.insert(0, idx_)
+
+        if idx < len(q0s) - 1:      
+            cur = first
+            for t in q0s[idx+1:]:
+                    idx_ = np.nanargmin(np.abs(cur - t))
+                    cur = t[idx_]
+                    t[idx_] = np.nan
+                    br.append(idx_)
+            
+        bs.append(br)
+    return bs
+
+def unwrap_Z(result, step):
+    _, Z, _ = extract_params(result.get_results())
+    unwrapped = Z.groupby('t_index').transform(lambda x: np.unwrap(np.angle(x)))
+    return unwrapped[:,step]
+
+def find_branches2(q0s):
     q0s = np.reshape(np.array(deepcopy(q0s), dtype=object), X.shape)
     q0s[1::2] = q0s[1::2, ::-1]
     q0s = list(q0s.ravel())
@@ -260,3 +297,5 @@ def find_branches(q0s):
     bs[:,1::2] = bs[:,1::2,::-1]
     return list(bs.reshape(bs.shape[0], -1))
 
+def vals_from_branches(branches, vals):
+    return [np.array([v[b] for (v,b) in zip(vals, br)]) for br in branches]

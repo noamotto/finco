@@ -166,7 +166,7 @@ plt.plot(np.real(a_lines[2]), np.imag(a_lines[2]), ':m')
 
 #%% Locate and isolate Stokes and anti-Stokes lines 2
 
-F, F_3 = approximate_F(proj.q0, proj.xi, caustics.iloc[2])
+F, F_3 = approximate_F(proj.q0, proj.xi, caustics.iloc[1])
 phi0 = np.angle(F_3)
 
 s_lines = []
@@ -227,7 +227,18 @@ plt.gca().autoscale_view()
 
 #%% Iterative anti-stokes line 
 from joblib import Parallel, delayed
+from tqdm import tqdm
 dq = 1e-2
+
+def find_phis(proj, caustic):
+    F, F_3 = approximate_F(proj.q0, proj.xi, caustic)
+    phi0 = np.angle(F_3)
+
+    sphis = (np.arange(-4,4) * np.pi - phi0)/3
+    sphis = sphis2[(sphis2 > -np.pi) & (sphis2 < np.pi)]
+    aphis = (np.arange(-4,4) * np.pi - phi0)/3 + np.pi/6
+    aphis = aphis2[(aphis2 > -np.pi) & (aphis2 < np.pi)]
+    return np.concatenate((aphis[:3], sphis[:3]))
 
 def do_step(result, prev, stokes):
     proj = result.get_projection_map(1)
@@ -239,47 +250,55 @@ def do_step(result, prev, stokes):
     sigma_1 = deriv.sigma_1.to_numpy()
     xi_1 = deriv.xi_1.to_numpy()
     F1 = sigma_1[:n] - sigma_1[n:] * xi_1[:n] / xi_1[n:]
-    dq1 = np.array([[1j, -1j], [1, -1]])[stokes.astype(int)] * (np.abs(F1) / F1 * dq)[:,np.newaxis]
-    dq1 = np.choose(np.argmax(np.abs(proj.q0.to_numpy()[:n, np.newaxis] + dq1 -
-                                     prev[:n, np.newaxis]), axis=1), dq1.T)
+    dq1 = (np.array([[1j, -1j], [1, -1]])[stokes.astype(int)].reshape(-1,2) * 
+           np.expand_dims((np.abs(F1) / F1 * dq), -1))
+    dq1 = np.choose(np.argmax(np.abs(np.expand_dims(proj.q0.loc[:n-1], -1) + 
+                                     dq1 - np.expand_dims(prev[0].flatten(), -1)), axis=1), dq1.T)
     dq2 = xi_1[:n] / xi_1[n:] * dq1
     norm = dq / np.max(np.abs([dq1, dq2]), axis=0)
     dq1 *= norm
     dq2 *= norm
-    return create_ics(np.concatenate([proj.q0.loc[:n-1] + dq1,
-                                      proj.q0.loc[n:] + dq2]), S0 = [S0_0, S0_1, S0_2], gamma_f=1)    
+    return create_ics(np.concatenate([deriv.q0.loc[:n-1] + dq1,
+                                      deriv.q0.loc[n:] + dq2]), S0 = [S0_0, S0_1, S0_2], gamma_f=1)    
 
 def iterative_stokes(n, phis, q, stokes):
-    ics = create_ics(np.concatenate([q + dq*np.exp(1j*phis), 
-                      q - dq*np.exp(1j*phis)]), S0 = [S0_0, S0_1, S0_2], gamma_f=1)
+    phis, q, stokes = np.broadcast_arrays(phis, q, stokes)
+    ics = create_ics(np.stack([q + dq*np.exp(1j*phis), 
+                      q - dq*np.exp(1j*phis)]).flatten(), S0 = [S0_0, S0_1, S0_2], gamma_f=1)
     
-    prev = np.full(len(ics), q)
+    shape = np.concatenate([[2], q.shape])
+    prev = np.stack([q, q])
     cur = propagate(ics, 
                     V = [V_0, V_1, V_2], m = m, gamma_f=1, 
                     time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1,
-                    blocksize=1024, n_jobs=1, verbose=False, trajs_path=None)
-    qs = np.stack([prev, cur.q0.loc[:, 1]])
+                    blocksize=1, n_jobs=6, verbose=False, trajs_path=None)
+    qs = np.stack([prev, np.reshape(cur.q0.loc[:, 1], shape)])
     
-    for i in range(n):
+    for i in tqdm(range(n)):
         # print(f'iteration {i+1}')
         next_ics = do_step(cur, prev, stokes)
-        prev = cur.q0[:,1].to_numpy()
+        prev = np.reshape(cur.q0[:,1], shape)
         cur = propagate(next_ics, 
                         V = [V_0, V_1, V_2], m = m, gamma_f=1, 
                         time_traj = QuarticTimeTrajectory(), dt = 1e-3, drecord=1,
-                        blocksize=1024, n_jobs=1, verbose=False, trajs_path=None)
+                        blocksize=1, n_jobs=6, verbose=False, trajs_path=None)
         if i % 5 == 0:
-            qs = np.concatenate([qs, cur.q0.loc[:, 1].to_numpy()[np.newaxis,:]])
+            qs = np.concatenate([qs, np.reshape(cur.q0.loc[:, 1], np.concatenate([[1], shape]))])
     
     return qs
 
-qss1 = iterative_stokes(n=550, phis=np.concatenate((aphis1[:3], sphis1[:3])), q=caustics.loc[0].q,
-                        stokes=np.array([False]*3 + [True]*3)).reshape(-1,2,6)
-qss2 = iterative_stokes(n=550, phis=np.concatenate((aphis2[:3], sphis2[:3])), q=caustics.loc[2].q,
-                        stokes=np.array([False]*3 + [True]*3)).reshape(-1,2,6)
+qs = np.reshape(caustics.q, (len(caustics),1,1))
+phis = np.concatenate([find_phis(proj, caustic[1]) for caustic in caustics.iterrows()]).reshape(len(caustics),2,3)
+stokes = np.reshape(([False]*3 + [True]*3) * len(caustics), (len(caustics),2,3))
+qss = iterative_stokes(n=550, phis=phis, q=qs, stokes=stokes)
+
+# qss1 = iterative_stokes(n=550, phis=np.concatenate((aphis1[:3], sphis1[:3])), q=caustics.loc[0].q,
+#                         stokes=np.array([False]*3 + [True]*3))
+# qss2 = iterative_stokes(n=550, phis=np.concatenate((aphis2[:3], sphis2[:3])), q=caustics.loc[1].q,
+#                         stokes=np.array([False]*3 + [True]*3))
 #%%
-astokes_it1 = [np.concatenate([qss1[::-1,0,i], qss1[:,1,i]]) for i in range(6)]
-astokes_it2 = [np.concatenate([qss2[::-1,0,i], qss2[:,1,i]]) for i in range(6)]
+astokes_it1 = [np.concatenate([qss[::-1,0,0,0,i], qss[:,1,0,0,i]]) for i in range(3)]
+astokes_it2 = [np.concatenate([qss[::-1,0,1,0,i], qss[:,1,1,0,i]]) for i in range(3)]
 
 plt.plot(np.real(astokes_it1[0]), np.imag(astokes_it1[0]), ':r')
 plt.plot(np.real(astokes_it1[1]), np.imag(astokes_it1[1]), ':r')
