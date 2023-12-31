@@ -17,7 +17,7 @@ from splitting_method import SplittingMethod
 
 #%% Preprocessing
 resfile = ''
-result = load_results('trajs_1_T_2.0_dt_0.02.hdf')
+result = load_results('/home/nomyle/trajs_1_T_2.0_dt_0.02_small.hdf')
 
 a = 0.5
 b = 0.1
@@ -46,13 +46,17 @@ spl.propagate()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'using device {device}')
-lr = 1e-3
+lr = 1e-1
 epochs = 250
 
 loader = DataLoader(FINCODataset(result, -5, 5, 100, -5, 5, 100, 100), batch_size=1, shuffle=True, drop_last=True)
 n_trajs = loader.dataset.n_trajs
 model = torch.nn.Sequential(torch.nn.Flatten(),
-                            torch.nn.Linear(11*2*n_trajs,n_trajs,bias=False),
+                            torch.nn.Linear(10*2*n_trajs,2*n_trajs,bias=False),
+                            torch.nn.ReLU(),
+                            torch.nn.Linear(2*n_trajs, n_trajs,bias=False),
+                            torch.nn.ReLU(),
+                            torch.nn.Linear(n_trajs, n_trajs,bias=False),
                             torch.nn.Sigmoid())
 loss = CoherentLoss(-5, 5, 1000, -5, 5, 100, spl)
 optim = torch.optim.SGD(model.parameters(), lr=lr)
@@ -65,8 +69,11 @@ for epoch in range(epochs):
         x = x.to(device=device)
         model.zero_grad()
         y = model(x)
+        # y.retain_grad()
         l = loss(y, x)
         l.backward()
         optim.step()
+        print(f'batch {batch+1:>5d}: loss {l.item():>7f}')
         if (batch+1) % 10 == 0:
             print(f'batch {batch+1:>5d}: loss {l.item():>7f}')
+    

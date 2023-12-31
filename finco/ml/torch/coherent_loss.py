@@ -32,7 +32,8 @@ class CoherentLoss(nn.Module):
         
     def forward(self, factors, trajs):
         # perform binning based on the given results
-        qf, pf, _ = _calc_proj(trajs.cpu(), self.gamma_f)
+        qf, pf = trajs[:,:,6,0] / 2 / self.gamma_f, -trajs[:,:,6,1]
+        # qf, pf, _ = _calc_proj(trajs.cpu(), self.gamma_f)
         
         dq, dp = (self.qmax - self.qmin) / self.qbins, (self.pmax - self.pmin) / self.pbins
         
@@ -52,9 +53,10 @@ class CoherentLoss(nn.Module):
         gt = torch.trapz(torch.conj(gfs) * self.psi.unsqueeze(-1), self.x, axis=0)
 
         # Calculate estimation based on factors and calculate loss
-        pref = _calc_pref(trajs, self.gamma_f).to(factors.device)
-        pref.real.nan_to_num_().clamp_(1e2, -1e2)
-        pref.imag.nan_to_num_().clamp_(1e2, -1e2)
+        # pref = _calc_pref(trajs, self.gamma_f).to(factors.device)
+        pref = torch.view_as_complex(trajs[:,:,5,:]).to(factors.device)
+        pref.real.nan_to_num_().clamp_(-1e4, 1e4)
+        pref.imag.nan_to_num_().clamp_(-1e4, 1e4)
         
         vals_binned = torch.zeros_like(pref).scatter_add(1, inds, pref * factors)
         loss = (torch.abs(vals_binned - gt)**2).sum()
