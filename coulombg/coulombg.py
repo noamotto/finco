@@ -122,6 +122,8 @@ class CoulombGTimeTrajectory(TimeTrajectory):
         self.nfirst = np.zeros(q0.shape)
         self.nfirst[(q0.imag < 0) & (q0.real > -1)] += 2 * (self.dir[(q0.imag < 0) & (q0.real > -1)] > 0) - 1
         self.a = coulombg_pole(q0, p0, n=self.nfirst) - self.u
+        self.turns = np.ones(q0.shape) 
+        self.turns[(q0.real < 0) & (self.dir < 0)] += 1
         # self.a[q0.imag < 0] -= self.r *2
 
         # b: Point of exit from the poles line
@@ -141,7 +143,7 @@ class CoulombGTimeTrajectory(TimeTrajectory):
 
             self.path.append(LineTraj(t0=0, t1=1/3, a=t0, b=self.a))
             self.path.append(CircleTraj(t0=1/3, t1=2/3, a=self.a, r=self.r,
-                                        turns=1 + self.first, phi0=-np.pi/2*self.dir))
+                                        turns=self.turns, phi0=-np.pi/2*self.dir))
             self.path.append(LineTraj(t0=2/3, t1=1, a = self.a, b=t1))
 
         else:
@@ -150,14 +152,14 @@ class CoulombGTimeTrajectory(TimeTrajectory):
 
             self.path.append(LineTraj(t0=0, t1=Ts[0], a=t0, b=self.a))
             self.path.append(CircleTraj(t0=Ts[0], t1=Ts[1], a=self.a, r=self.r,
-                                        turns=1 + self.first, phi0=-np.pi/2*self.dir))
+                                        turns=1, phi0=-np.pi/2*self.dir))
             self.path.append(LineTraj(t0=Ts[1], t1=Ts[2],
                                       a=self.a, b=self.a + 2*self.r))
 
             for i in range(self.n-2):
                 a = self.a + 2*(i+1)*self.r
                 self.path.append(CircleTraj(t0=Ts[2*i+2], t1=Ts[2*i+3],
-                                            a=a, r=self.r, turns=1, phi0=-np.pi/2*self.dir))
+                                            a=a, r=self.r, turns=self.turns, phi0=-np.pi/2*self.dir))
                 self.path.append(LineTraj(t0=Ts[2*i+3], t1=Ts[2*i+4], a=a, b=a + 2*self.r))
 
             self.path.append(CircleTraj(t0=Ts[-2], t1=Ts[-1],
