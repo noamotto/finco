@@ -70,8 +70,9 @@ S0 = [S0_0, S0_1, S0_2]
 
 def coulombg_pole(q0, p0, n=0):
     E0 = p0**2/2/m - 1/q0
-    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*p0*q0 + 2*E0*q0 + 1)
-                                        + n*1j*np.pi*2)/2/E0**1.5)
+    sign = np.sign(q0.real)*np.sign(q0.imag)
+    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*sign*p0*q0 + 2*E0*q0 + 1)
+                                        + n*1j*np.pi*2)/2/E0**1.5/sign)
 
 def coulombg_diff(q0, p0):
     return coulombg_pole(q0, p0, n=1) - coulombg_pole(q0, p0, n=0)
@@ -120,7 +121,7 @@ class CoulombGTimeTrajectory(TimeTrajectory):
 
         # a: Point starting to circle poles
         self.nfirst = np.zeros(q0.shape)
-        self.nfirst[(q0.imag < 0) & (q0.real > -1)] += 2 * (self.dir[(q0.imag < 0) & (q0.real > -1)] > 0) - 1
+        self.nfirst[(q0.imag < 0) & (q0.real > 0)] -= 1
         self.a = coulombg_pole(q0, p0, n=self.nfirst) - self.u
         self.turns = np.ones(q0.shape) 
         self.turns[(q0.real < 0) & (self.dir < 0)] += 1

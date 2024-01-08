@@ -24,7 +24,7 @@ def plot_markers(x, ax, diff, **kwargs):
         ax.plot(np.real(x[point]), np.imag(x[point]), marker=(3,1,direction - 90), ms=7, **kwargs)
 
 T = 1*2*halfcycle
-qs = np.array([3+1j])
+qs = np.array([-1+1j])
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
 try:
@@ -32,7 +32,7 @@ try:
 except FileExistsError:
     pass
 
-fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3, num='trajs_q_f',
+fig, ((t_o0, t_o1, t_o2), (q_o0, q_o1, q_o2)) = plt.subplots(2, 3,
                                                              figsize=(14.4, 9.6))
 fig.suptitle(f'q={qs[0]}, T={T:.3f}')
 
@@ -117,7 +117,7 @@ for q0, traj in trajs.groupby('q0'):
 
 #%% Order 2
 
-order = 2
+order = 4
 result = propagate(ics,
                    V = V, m = m, gamma_f=1,
                    time_traj = CoulombGTimeTrajectory(n=order, t=T),

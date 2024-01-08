@@ -113,7 +113,7 @@ class TestTimeTrajectory(TimeTrajectory):
         diff = coulombg_diff(q0, p0)
         r_dir = -np.sign(diff)
         self.a = np.array(coulombg_pole(q0, p0, n=0) * (1 - self.alphas) + 
-                          coulombg_pole(q0, p0, n=1) * self.alphas)
+                          coulombg_pole(q0, p0, n=-1) * self.alphas)
         self.r = np.array(-diff * r_dir / 2)
 
         self.r *= self.alphas * 2
@@ -165,7 +165,7 @@ class TestTimeTrajectory(TimeTrajectory):
         return [0.05, 0.1, 0.5, 0.6]
 
 N = 100
-q = 1+1j
+q = -0.5-0.5j
 qs = np.full(N, q)
 alphas = np.linspace(0.99, 0.01, N)
 
@@ -278,3 +278,35 @@ for (i, caustic) in caustics[n].iterrows():
     # plt.scatter(np.real(caustic.q), np.imag(caustic.q))
 S_F *= (np.real(proj.sigma) <= 0)
 S_F *= (np.abs(deriv.xi_1) <= 100)
+
+#%%
+def crash(q,p):
+    t = CoulombGTimeTrajectory(n=0).init(create_ics(q,S0,gamma_f=1))
+    return coulombg_pole(q,p,t.nfirst + k)
+q = np.array([-1 - 4j])
+ics = create_ics(q, S0 = S0, gamma_f=1)
+plt.figure(fr'$q={q}$')
+
+for k in np.arange(-3,4):
+    result = propagate(ics, V = V, m = m, gamma_f = 1,
+                            time_traj = CoulombGTimeTrajectory(n=0, t=crash),
+                            dt = 1e-3, drecord=1/100,
+                            n_jobs = n_jobs, blocksize=2**10,
+                            trajs_path=None)
+    plt.scatter(np.real(result.t.loc[:,50:]), np.imag(result.t.loc[:,50:]),
+                c=np.real(result.p.loc[:, 50:]))
+    
+#%%
+def crash(q,p):
+    t = CoulombGTimeTrajectory(n=n).init(create_ics(q,S0,gamma_f=1))
+    return t.b + t.u
+
+n=6
+X, Y = np.meshgrid(np.linspace(-15, 15, 300), np.linspace(-6, 6, 300))
+qs = (X+1j*Y)[(Y != 1) & (Y != -1)]
+ics = create_ics(qs, S0 = S0, gamma_f=1)
+result = propagate(ics, V = V, m = m, gamma_f = 1,
+                        time_traj = CoulombGTimeTrajectory(n=n, t=crash),
+                        dt = 1e-4, drecord=1/100,
+                        n_jobs = n_jobs, blocksize=2**10,
+                        trajs_path=None)
