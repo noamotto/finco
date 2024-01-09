@@ -121,7 +121,7 @@ class CoulombGTimeTrajectory(TimeTrajectory):
 
         # a: Point starting to circle poles
         self.nfirst = np.zeros(q0.shape)
-        self.nfirst[(q0.imag < 0) & (q0.real > 0)] -= 1
+        self.nfirst[(q0.imag < 0) & (self.dir > 0)] -= 1
         self.a = coulombg_pole(q0, p0, n=self.nfirst) - self.u
         self.turns = np.ones(q0.shape) 
         self.turns[(q0.real < 0) & (self.dir < 0)] += 1
@@ -165,7 +165,7 @@ class CoulombGTimeTrajectory(TimeTrajectory):
 
             self.path.append(CircleTraj(t0=Ts[-2], t1=Ts[-1],
                                         a=self.b, r=self.r,
-                                        turns=1, phi0=-np.pi/2*self.dir))
+                                        turns=3, phi0=-np.pi/2*self.dir))
             self.path.append(LineTraj(t0=Ts[-1], t1=1, a=self.b, b=t1))
 
         return self
