@@ -4,8 +4,7 @@ Legacy tools for locating caustics in FINCO results and dealing with Stokes
 phenomenon. Left here as reference, but should not be used in new code.
 """
 
-import logging
-from typing import Callable, List, Tuple
+from typing import Tuple
 
 from skimage import measure, feature, morphology
 import numpy as np
@@ -14,7 +13,7 @@ from numpy.typing import ArrayLike
 from scipy.special import erf
 
 
-def find_stokes_sectors(grid: ArrayLike, F: ArrayLike, 
+def find_stokes_sectors(grid: ArrayLike, F: ArrayLike,
                         caustic: pd.Series) -> Tuple[ArrayLike, ArrayLike]:
     """
     Locates the Stokes sectors for a specific caustic, based on image analysis
@@ -22,9 +21,9 @@ def find_stokes_sectors(grid: ArrayLike, F: ArrayLike,
 
     The function takes the sign map of the real and imaginary parts of F, and
     using image processing tools tries to divide them into the stokes and
-    anti-stokes sectors. 
-    
-    Not so efficient, rendundant comparing to using v_t, and only works 
+    anti-stokes sectors.
+
+    Not so efficient, rendundant comparing to using v_t, and only works
     for grids.
 
     Parameters
@@ -48,7 +47,7 @@ def find_stokes_sectors(grid: ArrayLike, F: ArrayLike,
         Map of the anti-stokes sectors, where each point's value is a sector label
         assigned to it.
     """
-    
+
     idx = np.argmin(np.abs(grid-caustic.q))
     x0,y0  = idx//grid.shape[1], idx % grid.shape[1]
 
@@ -92,11 +91,11 @@ def find_stokes_sectors(grid: ArrayLike, F: ArrayLike,
 
     return stokes, astokes
 
-def calc_factor(F: ArrayLike, sigma: ArrayLike, stokes: ArrayLike, 
+def calc_factor(F: ArrayLike, sigma: ArrayLike, stokes: ArrayLike,
                 anti_stokes: ArrayLike) -> ArrayLike:
     """
     Calculates the Barry factor given a map of stokes and anti-stokes sectors.
-    
+
     Only works for grids, and is probably redundant comparing to using v_t.
 
     Parameters

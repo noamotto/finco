@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Definition of FINCO's time trajectory and additional utility time trajectories.
+Utility trajectories translating a trajectory in some coordinate in phase space
+into a trajectory in time.
 
-The two utilitytrajectories defined here are for a line trajectory and a circle
-trajectory.
+@author: Noam Ottolenghi
 """
 
 from .time_traj import TimeTrajectory, SequentialTraj, OdeSolTraj

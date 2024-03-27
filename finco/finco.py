@@ -67,8 +67,7 @@ from .utils import hbar
 from .results import FINCOResults, FINCOWriter, load_results, results_from_data
 from .time_traj import TimeTrajectory
 
-def create_ics(q0: ArrayLike, S0: ArrayLike, gamma_f: float = 1,
-               t0: Optional[ArrayLike] = None):
+def create_ics(q0: ArrayLike, S0: ArrayLike, t0: Optional[ArrayLike] = None):
     """
     Creates a set of initial trajectory states for FINCO
 
@@ -79,9 +78,6 @@ def create_ics(q0: ArrayLike, S0: ArrayLike, gamma_f: float = 1,
     S0 : ArrayLike of 3 functions
         The function S(t=0,q) and its first two spatial derivatives. Should
         be packed as [S, dS/dq, d^2S/dq^2]
-    gamma_f : float, optional
-        Gaussian width for the Gaussians sampled for wavepacket reconstruction.
-        The default is 1.
     t0 : ArrayLike of complex, optional
         Initial times for the trajectories. The default is None, on which t0=0
         is assigned to all trajectories.
@@ -206,7 +202,7 @@ def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
     """
     res = np.array([sol(t) for t in np.linspace(t_0, t_1, 50)]).T.reshape((5,-1,50))
     Mp, Mq = res[3:]
-    xi_1 = (2 * gamma_f * Mq - 1j / hbar * Mp)
+    xi_1 = 2 * gamma_f * Mq - 1j / hbar * Mp
 
     xi_1_angle = np.angle(xi_1)
     if ref_angle is not None:
@@ -256,8 +252,7 @@ def calc_xis(sol, Ts: ArrayLike, gamma_f: float,
     return np.stack(xi_1_abs).T, np.stack(xi_1_angle).T
 
 def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
-                   time_traj: TimeTrajectory, max_step: float, Ts: ArrayLike,
-                   gamma_f: float) -> ArrayLike:
+                   time_traj: TimeTrajectory, max_step: float, Ts: ArrayLike) -> ArrayLike:
     """
     Propagates a block of intial states in time in the system. The function
     does the propagation and returns the results.
@@ -282,8 +277,6 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
     Ts : ArrayLike of floats in range of (0,1)
         Increasing sequence of times to take a trajectory snapshot, in the
         time trajectory parameterization.
-    gamma_f : float
-        Gaussian width for the Gaussians sampled for wavepacket reconstruction.
 
     Returns
     -------
@@ -319,7 +312,7 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
             t_eval = t_eval[t_eval > t0]
 
         res = solve_ivp(_do_step, (t0, t1),
-                        y0, args=(time_traj, V, m),
+                        y0, args=(time_traj.t_funcs, V, m),
                         t_eval=None if len(t_eval) == 0 else t_eval, max_step=max_step,
                         vectorized=True, dense_output=True)
 
@@ -361,7 +354,7 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     """
     def process_block(block):
         return propagate_traj(block, conf.V, conf.m, time_traj=conf.time_traj,
-                              max_step=conf.dt, Ts=Ts, gamma_f=conf.gamma_f)
+                              max_step=conf.dt, Ts=Ts)
 
     logger = logging.getLogger('finco.propagation')
     conf = FINCOConf(**kwargs)

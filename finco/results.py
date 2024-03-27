@@ -13,6 +13,8 @@ use load_results(), or results_from_data() to wrap raw results.
 The loading from a results file is done lazily, meaning that data is processed
 on demand. For efficiency, one can load a portion of a results file into memory
 using get_view().
+
+@author: Noam Ottolenghi
 """
 
 import os
@@ -106,7 +108,7 @@ def _calc_derivatives(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.S
     Z, Pz = results.Mqq + results.Mqp * results.S_20, results.Mpq + results.Mpp * results.S_20
     xi_1 = 2 * gamma_f * Z - 1j / hbar * Pz
     sigma_1 = 1j / 2 / gamma_f / hbar * results.p * xi_1
-    return xi_1, sigma_1
+    return xi_1, sigma_1, Z, Pz
 
 def _calc_pref(results: pd.DataFrame, gamma_f: float) -> pd.Series:
     """
@@ -127,7 +129,7 @@ def _calc_pref(results: pd.DataFrame, gamma_f: float) -> pd.Series:
         at timestep
     """
     *_, sigma = _calc_projection(results, gamma_f)
-    xi_1, _ = _calc_derivatives(results, gamma_f)
+    xi_1, *_ = _calc_derivatives(results, gamma_f)
 
     pref = (np.abs(xi_1) ** 1.5 *             # Jacobian's norm
             np.exp(np.angle(xi_1) * -0.5j) *  # Jacobian's angle
@@ -192,12 +194,12 @@ class FINCOResults:
 
         # System
         self.gamma_f = gamma_f
-        
+
         self._populate_data()
 
     def __len__(self):
         return self.nrows
-        
+
     def __getattr__(self, name):
         try:
             self.logger.debug('Looking for attibute %s', name)
@@ -208,13 +210,17 @@ class FINCOResults:
                 return self.data[name]
         except Exception as E:
             raise AttributeError(name) from E
-            
+
     def __getstate__(self):
         if self.file_path is not None:
             with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
-                return file.get(key='results').__getstate__()
+                datadict = file.get(key='results').__getstate__()
         else:
-            return self.data.__getstate__()
+            datadict = self.data.__getstate__()
+            
+        datadict['gamma_f'] = self.gamma_f
+        
+        return datadict
 
     def __repr__(self):
         if self.file_path is not None:
@@ -237,7 +243,7 @@ class FINCOResults:
             self.ncols = self.data.shape[1]
             self.size = self.data.size
             self.shape = (self.nrows, self.ncols)
-        
+
     def merge(self, other):
         """
         Merges two result datasets together. The user should make sure the are
@@ -253,7 +259,7 @@ class FINCOResults:
                 file.append(key='results', value=other.get_results())
         else:
             self.data = pd.concat((self.data, other.get_results()))
-            
+
         self._populate_data()
 
     def get_results(self, start: Optional[int] = None,
@@ -402,10 +408,10 @@ class FINCOResults:
                 calculate the Stokes parameter and identify Stokes lines.
         """
         results = self.get_results(start=step, end=step+1)
-        xi_1, sigma_1 = _calc_derivatives(results, self.gamma_f)
+        xi_1, sigma_1, Z, Pz = _calc_derivatives(results, self.gamma_f)
 
         return pd.DataFrame({'q0': results.q0, 'xi_1': xi_1,
-                             'sigma_1': sigma_1}, index=results.index)
+                             'sigma_1': sigma_1, 'Z': Z, 'Pz': Pz}, index=results.index)
 
     def reconstruct_psi(self, x: ArrayLike, step: int, S_F: Optional[pd.Series] = None,
                         threshold: int = -1, n_jobs: int = 1) -> ArrayLike:
@@ -521,7 +527,7 @@ class FINCOResults:
             if not i % skip:
                 psi.set_ydata(np.abs(self.reconstruct_psi(x, i+1, threshold)))
                 plt.draw()
-                
+
     def save(self, file_path: str):
         """
         Saves an in-memory FINCO results dataset into file
@@ -544,10 +550,10 @@ class FINCOResults:
         """
         if self.data is None:
             raise ValueError('This FINCO results dataset is already in file')
-        
+
         with FINCOWriter(file_path) as writer:
             writer.add_results(self.data)
-        
+
         return load_results(file_path, self.gamma_f)
 
 

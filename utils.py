@@ -136,8 +136,8 @@ def complex_to_rgb(c: ArrayLike, absmin: float = 0, absmax: float = np.inf):
     return np.concatenate((rgb, np.expand_dims(np.ones_like(abs_c), -1)),
                           axis=-1)
 
-def tripcolor_complex(x: ArrayLike, y: ArrayLike, c: ArrayLike, 
-                      triangles: Optional[ArrayLike] = None, 
+def tripcolor_complex(x: ArrayLike, y: ArrayLike, c: ArrayLike,
+                      triangles: Optional[ArrayLike] = None,
                       absmin: float = 0, absmax: float = np.inf):
     """
     Creates a traingular mesh plot similar to plt.tripcolor, using complex

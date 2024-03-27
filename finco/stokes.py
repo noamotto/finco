@@ -18,7 +18,7 @@ from scipy.special import erf
 from utils import derivative
 from joblib import Parallel, delayed
 
-from .finco import propagate, create_ics, FINCOConf, continue_propagation
+from .finco import propagate, create_ics, continue_propagation
 from .results import FINCOResults, get_view
 from .time_traj import TimeTrajectory, LineTraj
 from .mesh import Mesh
@@ -109,8 +109,7 @@ def find_caustics(qs: ArrayLike, S0: ArrayLike, progress: bool = True,
                 The norm of dxi_f_dq0
     """
     def run_finco(q):
-        results = propagate(create_ics(np.array([q[0]+q[1]*1j]), S0=S0,
-                                       gamma_f = c.gamma_f), **kwargs)
+        results = propagate(create_ics(np.array([q[0]+q[1]*1j]), S0=S0), **kwargs)
 
         res = results.get_caustics_map(step=1).xi_1.to_numpy()
         return float(res.real), float(res.imag)
@@ -120,7 +119,6 @@ def find_caustics(qs: ArrayLike, S0: ArrayLike, progress: bool = True,
     kwargs['trajs_path'] = None
     n_jobs = kwargs.pop('n_jobs', 1)
 
-    c = FINCOConf(**kwargs)
     res = Parallel(n_jobs=n_jobs, verbose=10 * progress)([delayed(root)(run_finco,
                                                                         x0=(x,y)) for x, y
                                                           in zip(np.real(qs), np.imag(qs))])
@@ -150,8 +148,7 @@ def find_caustics(qs: ArrayLike, S0: ArrayLike, progress: bool = True,
     for i, caustic in caustics.iterrows():
         X, Y = np.meshgrid(np.linspace(np.real(caustic.q - 1e-3), np.real(caustic.q + 1e-3), 5),
                            np.imag(caustic.q))
-        window = propagate(create_ics((X+1j*Y).flatten(), S0=S0, gamma_f = c.gamma_f),
-                           **kwargs)
+        window = propagate(create_ics((X+1j*Y).flatten(), S0=S0), **kwargs)
         deriv = window.get_caustics_map(1)
         caustics.loc[i, 'xi'] = window.get_projection_map(1).iloc[2].xi
 
@@ -203,13 +200,13 @@ def approximate_F(q0: pd.Series, xi: pd.Series,
 def calc_factor2(caustic: pd.Series, q0: pd.Series, xi: pd.Series,
                  sigma: pd.Series) -> pd.Series:
     """
-    Calculates the Barry factor using :math:`\\tilde\\nu` for a caustic, as described in
+    Calculates the Berry factor using :math:`\\tilde\\nu` for a caustic, as described in
     https://aip.scitation.org/doi/pdf/10.1063/1.5024467
 
     The method calculates :math:`\\tilde\\nu` using the caustic, and the
     :math:`\\xi` and :math:`\\sigma` values on
     the plane, infers from it the approximation of the Stokes and anti-Stokes
-    sectors, and calculates the full Barry factor. The method is very efficient,
+    sectors, and calculates the full Berry factor. The method is very efficient,
     but might need better treatment of the time trajectories.
 
     Parameters
@@ -230,7 +227,7 @@ def calc_factor2(caustic: pd.Series, q0: pd.Series, xi: pd.Series,
     Returns
     -------
     factor : ArrayLike of float in range [0,1]
-        Barry factor. Should be multiplied with the prefactors of each point,
+        Berry factor. Should be multiplied with the prefactors of each point,
         in order to apply the treatment of Stokes phenomenon.
 
     """
@@ -247,7 +244,7 @@ def calc_factor2(caustic: pd.Series, q0: pd.Series, xi: pd.Series,
     # Find the point closest in angle to a Stokes line, preferring points closer
     # to the caustic. In addition, we restrict ourselves only to points close
     # to the caustic
-    divergent_mask = (np.real(sigma) > 0)
+    divergent_mask = np.real(sigma) > 0
 
     # Determine radius of r. If using F_4 / F_3 yields nothing, take a radius of
     # very low percentile of points.
@@ -449,7 +446,7 @@ def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
         x values for the reconstructed wavepacket. None indicates that wavfunction
         reconstruction should not be performed and plotted. The default is None.
     S_F : pandas.Series of complex, optional
-        Calculated Barry factor resulting from Stokes treatment of the results,
+        Calculated Berry factor resulting from Stokes treatment of the results,
         as given by calc_factor2(). If None, and plot_steps is True, a factor of
         one is used for all trajectories. The default is None.
 
@@ -494,7 +491,7 @@ def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
                             Not reconstructing wavefunction""")
 
             if S_F is None:
-                logger.info("No inital Barry factor was given for step plotting. \
+                logger.info("No inital Berry factor was given for step plotting. \
                             Using imaginary component of time as factor")
 
             psis = [orig.reconstruct_psi(x, 1, S_F, n_jobs=n_jobs)]
@@ -549,7 +546,17 @@ def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
                 b = np.imag(view.get_trajectories(1).t.to_numpy())
                 _, [diff, times] = plt.subplots(1,2)
                 diff.tripcolor(np.real(ics.q0), np.imag(ics.q0), np.sign(a))
+                diff.set_xlabel('$\Re q_0$')
+                diff.set_ylabel('$\Im q_0$')
+                diff.set_title('$\Delta t$')
+                plt.colorbar(diff.tripcolor(np.real(ics.q0), np.imag(ics.q0), np.sign(a)))
+                
                 times.tripcolor(np.real(ics.q0), np.imag(ics.q0), np.sign(b))
+                times.set_xlabel('$\Re q_0$')
+                times.set_ylabel('$\Im q_0$')
+                times.set_title('Caustic time sign')
+                
+                plt.tight_layout()
 
                 ts = np.imag(view.get_trajectories(1).t)
                 factor = S_F*np.sign(ts) if S_F is not None else ts > 0

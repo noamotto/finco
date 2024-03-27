@@ -28,10 +28,10 @@ cdef _actual_stuff(complex[:] q, complex[:] p,
     
     return res
 
-def _do_step(tau: float, y, t_trajs: TimeTrajectory, V: list, m: float):
-    # t = t_trajs.t_0(tau)
+def _do_step(tau: float, y, t_trajs: list, V: list, m: float):
+    t = t_trajs[0](tau)
 
     q, p, _, M_pp, M_pq, M_qp, M_qq = y.reshape(7, -1)
 
     return _actual_stuff(q, p, M_pp, M_pq, M_qp, M_qq,
-                         t_trajs.t_1(tau), V[0](q), V[1](q), V[2](q), m)
+                         t_trajs[1](tau), V[0](q,t), V[1](q,t), V[2](q,t), m)

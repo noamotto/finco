@@ -2,8 +2,18 @@
 """
 Definition of FINCO's time trajectory and additional utility time trajectories.
 
-The two utilitytrajectories defined here are for a line trajectory and a circle
-trajectory.
+In addition to the trajectory baseclass this file contains several utility
+trajectory classes:
+
+    - Trajectory building utilities:
+        1. LineTraj - follows a trajectory in straight line
+        2. CircleTrajec - follows a trajectory along a circle
+    - Trajecty utility baseclasses
+        1. SequentialTraj - allows convenient stacking of trajectories in
+        sequential order.
+        2. OdeSolTraj - trajectory following an ODE solution object
+
+@author: Noam Ottolenghi
 """
 
 from typing import List, Union
@@ -79,6 +89,13 @@ class TimeTrajectory:
         """
         raise NotImplementedError
 
+    @property
+    def t_funcs(self):
+        """
+        Convenience property returning both t_0 and t_1 as list
+        """
+        return [self.t_0, self.t_1]
+
     def get_discontinuity_times(self) -> List[float]:
         """
         Retrieves a list of breaking times in the trajectory, meaning points
@@ -92,6 +109,12 @@ class TimeTrajectory:
             where the ttrajectory is not smooth.
         """
         return []
+
+    def length(self):
+        """
+        Returns the length of the trajectory.
+        """
+        return 0
 
 #######################################
 #        Utility trajectories         #
@@ -171,6 +194,9 @@ class CircleTraj(TimeTrajectory):
         return 2j*np.pi*self.turns/dt*self.r * \
             np.exp(2j*np.pi*self.turns*(tau - self.t0)/dt + self.phi0*1j)
 
+    def length(self):
+        return 2 * np.pi * np.abs(self.r * self.turns)
+
 class LineTraj(TimeTrajectory):
     """
     Follows line trajectories in time
@@ -230,3 +256,105 @@ class LineTraj(TimeTrajectory):
         """
         dt = self.t1 - self.t0
         return (self.b - self.a)/dt
+
+    def length(self):
+        return np.abs(self.b - self.a)
+
+######################################
+#   Utility trajectory baseclasses   #
+######################################
+class SequentialTraj(TimeTrajectory):
+    """
+    Utility class for creating a trajectory from a sequence of trajectories.
+
+    A subclass should provide two member parameters prior to the propagation:
+
+    - path : A list holding the sequence of trajectories to connect. The assumption \
+    is that the path runs from tau=0 to tau=1
+    - discont_times : A list holding the parameteric time tau on which the \
+        connection happens (and a discontinuity occours)
+
+    Optionally, the class can provide the property 'my_discont_times', which will
+    be used instead of discont_times. That is useful when having nested sequential
+    trajectories, to differentiate between the total discontinuity points and
+    the ones coming from this class.
+
+    Parameters
+    ----------
+    t0 : float in range [0, 1]
+        Initial time parameter for the trajectories.
+    t1 : float in range [0, 1]
+        Final time parameter for the trajectories. Should satisfy t1 < t0
+    """
+
+    discont_times: List[int]
+    path: List[TimeTrajectory]
+
+    def __init__(self, t0, t1):
+        self.t0 = t0
+        self.t1 = t1
+
+    def t_0(self, tau):
+        discont_times = self.discont_times
+        if hasattr(self, 'my_discont_times'):
+            discont_times = self.my_discont_times
+
+        t = (tau - self.t0) / (self.t1 - self.t0)
+        ts = np.array(discont_times + [1])
+        path = np.flatnonzero(ts >= t)[0]
+        return self.path[path].t_0(t)
+
+    def t_1(self, tau):
+        discont_times = self.discont_times
+        if hasattr(self, 'my_discont_times'):
+            discont_times = self.my_discont_times
+
+        t = (tau - self.t0) / (self.t1 - self.t0)
+        dt = 1 / (self.t1 - self.t0)                # Jacobian due to the change in tau
+        ts = np.array(discont_times + [1])
+        path = np.flatnonzero(ts >= t)[0]
+        return self.path[path].t_1(t) * dt
+
+    def get_discontinuity_times(self):
+        return self.discont_times
+
+    def length(self):
+        return np.sum([p.length() for p in self.path], axis=0)
+
+class OdeSolTraj(TimeTrajectory):
+    """
+    Utility trajectory class enveloping an ODE solution. Useful when the time
+    trajectory is a result of a propagation of time on another coordinate like
+    position or momentum.
+
+    Parameters
+    ----------
+    t0 : float in range [0, 1]
+        Initial time parameter for the trajectories.
+    t1 : float in range [0, 1]
+        Final time parameter for the trajectories. Should satisfy t1 < t0
+    sol : Callable
+        The propagation solution. When called as `sol(tau)` sould return the
+        trajectory's coordinates at trajectory parameter `tau`
+    n : int, optional
+        Number of solutions to actually take from the beginning. Useful when
+        the propagation result contains the trajectory in parameters other than
+        time. If not positive then all solutions are taken. The default is 0.
+    """
+    def __init__(self, t0, t1, sol, n = 0):
+        self.t0 = t0
+        self.t1 = t1
+        self.sol = sol
+        self.n = n if n > 0 else sol(t0).shape[0]
+
+    def t_0(self, tau):
+        return self.sol(tau)[:self.n]
+
+    def t_1(self, tau):
+        dtau = np.finfo(np.float64).eps
+        return ((self.sol(tau + dtau) - self.sol(tau)) / dtau)[:self.n]
+
+    def length(self):
+        taus = np.linspace(self.t0, self.t1, 3000)
+        ts = np.stack([self.t_0(t) for t in taus])
+        return np.reshape(np.trapz(np.abs(ts), taus, axis=0), (-1))

@@ -17,6 +17,8 @@ The implementation supports different thresholds, as well as additional filterin
 and plotting of intermediate steps. The algorithm stops after a given number of
 steps has passed or no new points were added. The algorithm also saves snapshots
 at each step, along with the new candidates to add at each step, for further analysis.
+
+@author: Noam Ottolenghi
 """
 
 import logging
@@ -117,15 +119,15 @@ def _plot_step(mesh: Mesh, deriv: pd.DataFrame, candidate_inds: pd.DataFrame):
         mesh or not.
     """
     plt.figure()
-    tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), deriv.pref)
+    tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), deriv.pref, absmax=1e7)
     scipy.spatial.delaunay_plot_2d(mesh.tri, plt.gca())
 
     rejected = candidate_inds[~candidate_inds.subsampled]
     ignored = candidate_inds[candidate_inds.subsampled & ~candidate_inds.added]
     added = candidate_inds[candidate_inds.added]
-    plt.plot(np.real(rejected.q), np.imag(rejected.q), 'o', c='g', ms=2, zorder=1e3)
-    plt.plot(np.real(ignored.q), np.imag(ignored.q), 'o', c='orange', ms=2, zorder=1e3)
-    plt.plot(np.real(added.q), np.imag(added.q), 'o', c='r', ms=2, zorder=1e3)
+    plt.plot(np.real(rejected.q0), np.imag(rejected.q0), 'o', c='g', ms=2, zorder=1e3)
+    plt.plot(np.real(ignored.q0), np.imag(ignored.q0), 'o', c='orange', ms=2, zorder=1e3)
+    plt.plot(np.real(added.q0), np.imag(added.q0), 'o', c='r', ms=2, zorder=1e3)
 
 def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: Optional[ArrayLike] = None):
     """
@@ -137,7 +139,7 @@ def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: Optional[ArrayLike] =
         Mesh to consider when finding neighbors.
     qs : pandas.DataFrame
         Dataset containing the points to take from. Must have the point
-        coordiantes under the field 'q'.
+        coordiantes under the field 'q0'.
     indices : ArrayLike, optional
         Array of indices of points to find candidates around. None means all
         points are considered. The default is None.
@@ -150,10 +152,10 @@ def _get_candidates(mesh: Mesh, qs: pd.DataFrame, indices: Optional[ArrayLike] =
 
     """
     candidates = mesh.get_neighbors_value(qs, indices)
-    candidates = candidates[candidates.index.get_level_values(1) <
-                            candidates.index.get_level_values(0)]
-    candidates.q = (candidates.q.to_numpy() +
-                    qs.take(mesh.points_to_mesh(candidates.index.get_level_values(0))).to_numpy()) / 2
+    candidates = candidates[candidates.index.get_level_values('t_index') <
+                            candidates.index.get_level_values('point')]
+    candidates.q0 = (candidates.q0.to_numpy() +
+                    qs.take(mesh.points_to_mesh(candidates.index.get_level_values('point'))).to_numpy()) / 2
 
     return candidates
 
@@ -232,23 +234,23 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
     temp_kwargs['trajs_path'] = os.path.join(step_dir, 'temp.hdf')
 
     # Initial propagation
-    ics = create_ics(q0 = np.array(qs).flatten(), S0 = S0, gamma_f = c.gamma_f)
+    ics = create_ics(q0 = np.array(qs).flatten(), S0 = S0)
 
     logger.info('Propagating initial grid of %d points', len(ics))
     result = propagate(ics, **kwargs)
     shutil.copy(c.trajs_path, os.path.join(step_dir, "step_0.hdf"))
-    
+
     deriv = result.get_trajectories(n_steps)
     mesh = Mesh(deriv, adaptive=True)
 
-    candidate_inds = _get_candidates(mesh, deriv.q)
+    candidate_inds = _get_candidates(mesh, deriv.q0)
 
     # Adaptive sampling iterations
     for i in range(n_iters):
         logger.info('Starting subsampling step %d/%d', i+1, n_iters)
 
-        u = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values(1)))
-        v = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values(0)))
+        u = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values('t_index')))
+        v = deriv.take(mesh.points_to_mesh(candidate_inds.index.get_level_values('point')))
         E = _calc_E(u, v)
 
         to_subsample = (E > sub_tol[0]) & (E < sub_tol[1])
@@ -258,7 +260,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
         E = E[to_subsample]
 
         if filter_func:
-            to_filter = np.array(filter_func(candidate_inds.q))
+            to_filter = np.array(filter_func(candidate_inds.q0))
             candidate_inds = candidate_inds[to_filter]
             E = E[to_filter]
             u = u[to_filter]
@@ -269,8 +271,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
                         i+1, n_iters, len(candidate_inds))
 
             # propagate candidates
-            ics = create_ics(q0 = candidate_inds.q.to_numpy(), S0 = S0,
-                             gamma_f = c.gamma_f)
+            ics = create_ics(q0 = candidate_inds.q0.to_numpy(), S0 = S0)
             temp_res = propagate(ics, **temp_kwargs)
 
             # Calculate "energies" for subsampling
@@ -280,7 +281,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
 
             to_subsample = (dE > sub_tol[0]) & (dE < sub_tol[1])
             inds_to_add = to_subsample
-            toadd = temp_res.get_results().loc[ics[inds_to_add].index.get_level_values(0)]
+            toadd = temp_res.get_results().loc[ics[inds_to_add].index.get_level_values('t_index')]
             logger.debug('<dE>=%f', np.sum(dE[inds_to_add]))
 
             candidate_inds['subsampled'] = to_subsample
@@ -303,7 +304,7 @@ def adaptive_sampling(qs, S0: list, n_iters: int,
 
             # Prepare next iteration candidates
             deriv = result.get_trajectories(n_steps)
-            new_qs = result.get_results(0,1).q
+            new_qs = result.get_results(0,1).q0
             old_inds = np.unique(candidate_inds.index.
                                  get_level_values(0)[to_subsample & ~inds_to_add])
 

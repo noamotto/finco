@@ -62,7 +62,7 @@ from finco.time_traj import SequentialTraj, LineTraj, CircleTraj
 from finco.coord2time import Space2TimeTraj
 
 q_e = 1
-A0 = 1e-6
+A0 = -1
 def V_0(q, t):
     return -q_e / q + A0 * q
 
@@ -75,7 +75,8 @@ def V_2(q, t):
 V = [V_0, V_1, V_2]
 
 q0 = np.array([1-1j])
-p0 = np.array([1+1j])
+# p0 = np.array([1+1j])
+p0 = (-V[0](q0, 0) * 2)**0.5*0.99
 ics = create_ics(q0, S0)
 ics.p0 = p0[0]
 ics.p = p0[0]
@@ -93,13 +94,13 @@ class TestTraj(SequentialTraj):
         q0 = ics.q.to_numpy()
         r = np.abs(self.r / q0) * q0
         self.path = [LineTraj(t0=0, t1=0.3, a=q0, b=r),
-                     CircleTraj(t0=0.3, t1=1, a=r, r=r, turns=1, phi0=0)]
+                     CircleTraj(t0=0.3, t1=1, a=r, r=r, turns=-1, phi0=0)]
         self.discont_times = [0.3]
         
         return self
         
-tt1 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(rs[0]*1.1), V=V, m=m, max_step=1e-5).init(ics)
-# r2 = np.mean(np.abs(rs)) * rs[0] / np.abs(rs[0])
-# tt2 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(r2), V=V, m=m, max_step=1e-5).init(ics)
-# tt3 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(rs[1]/0.9), V=V, m=m, max_step=1e-5).init(ics)
+tt1 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(rs[0]*0.9), V=V, m=m, max_step=1e-5).init(ics)
+r2 = np.mean(np.abs(rs)) * rs[0] / np.abs(rs[0])
+tt2 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(r2), V=V, m=m, max_step=1e-5).init(ics)
+tt3 = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(rs[1]/0.9), V=V, m=m, max_step=1e-5).init(ics)
 

@@ -24,7 +24,7 @@ def plot_markers(x, ax, diff, **kwargs):
         ax.plot(np.real(x[point]), np.imag(x[point]), marker=(3,1,direction - 90), ms=7, **kwargs)
 
 T = 1*2*halfcycle
-qs = np.array([-1+1j])
+qs = np.array([1+1j])
 ics = create_ics(qs, S0 = S0, gamma_f=1)
 
 try:
