@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Test of validity of propagation contuation procedure.
 
-This is a temporary script file.
+The main goal of the test, aside of showcasing how to use continue_propagation(),
+is to assure the the propagation is continued correctly. 
+
+Two cases are compared here, both for a gaussian in quartic potential. In the
+first one full propagation takes place with two snapshots, and in the second it
+is broken into two parts, each with one snapshot taken. The snapshots are then
+compared to make sure the values are close.
+
+@author: Noam Ottolenghi
 """
 
 import numpy as np

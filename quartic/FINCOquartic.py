@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Various sketches and miscellaneous pieces of code for propagqation in quaric
+potential. Left as reference.
 
-This is a temporary script file.
+@author: Noam Ottolenghi
 """
+#%% Setup
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,7 +14,7 @@ from matplotlib.animation import FuncAnimation
 from quartic import S0, V, m, QuarticTimeTrajectory
 from finco import propagate, create_ics, adaptive_sampling
 
-#%%
+#%% Simple propagation
 
 X, Y = np.meshgrid(np.linspace(-6, 6, 201), np.linspace(-6, 6, 201))
 qs = (X+1j*Y).flatten()
@@ -26,7 +28,7 @@ result = propagate(create_ics(qs, S0 = S0), V = V, m = m, gamma_f=gamma_f,
                    blocksize=2**9, n_jobs=3,
                    trajs_path=f'trajs_{gamma_f}_T_{T}_dt_{T/n_steps}.hdf', verbose=True)
 
-#%%
+#%% Propagation with adaptive sampling
 import logging
 
 logging.basicConfig()
@@ -42,7 +44,7 @@ result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = S0,
                                  time_traj = QuarticTimeTrajectory(), dt = 1e-4, drecord=1 / n_steps,
                                  n_jobs=3)
 
-#%%
+#%% Legacy code for plotting trajectory animation
 fig, ax = plt.subplots()
 ax.set_xlim(-20, 20)
 ax.set_ylim(-20, 20)
@@ -55,25 +57,8 @@ def update(frame):
 ani = FuncAnimation(fig, update, frames = np.arange(0, 10, 5),
                     interval = 200, blit=True, repeat=False)
 
-#%%
-from utils import tripcolor_complex
-from finco.bomca_interp import BomcaLinearInterpolator
 
-res1 = result.get_results(100)
-deriv = result.get_caustics_map(100)
-
-qsamples = np.linspace(1e-2, 12, 500)
-S = res1.S + 0.5j * np.log(deriv.Z)
-
-plt.figure(), tripcolor_complex(np.real(res1.q0), np.imag(res1.q0), np.exp(1j*S), absmax=1e7)
-plt.xlabel(r'$\Re q_0$'), plt.ylabel(r'$\Im q_0$')
-
-bomca = BomcaLinearInterpolator(result, 100)
-mask = np.std(res1.q.to_numpy().take(bomca.simplices), axis=1) < 1
-q0s = bomca(qsamples, res1.q0, mask, ablocks=5, bblocks=5)
-plt.scatter(np.concatenate(q0s).real, np.concatenate(q0s).imag, c='r', s=2)
-
-#%%
+#%% Functions that Ifound no place for yet. unwrap_Z probably should be moved to a BOMCA related module.
 from copy import deepcopy
 
 def extract_params(res, gamma_f=1):

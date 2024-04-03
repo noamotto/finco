@@ -104,6 +104,10 @@ def _calc_derivatives(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.S
         First defivative of xi w.r.t. q0
     sigma_1 : pandas.Series of complex
         First defivative of sigma w.r.t. q0
+    Z : pandas.Series of complex
+        First defivative of q w.r.t. q0
+    Pz : pandas.Series of complex
+        First defivative of p w.r.t. q0
     """
     Z, Pz = results.Mqq + results.Mqp * results.S_20, results.Mpq + results.Mpp * results.S_20
     xi_1 = 2 * gamma_f * Z - 1j / hbar * Pz
@@ -406,6 +410,12 @@ class FINCOResults:
             sigma_1 : complex
                 First derivative of the sigma parameter w.r.t. q0. Used to
                 calculate the Stokes parameter and identify Stokes lines.
+            Z : pandas.Series of complex
+                First defivative of q w.r.t. q0. Can be used for additional
+                calculations
+            Pz : pandas.Series of complex
+                First defivative of p w.r.t. q0. Can be used for additional
+                calculations
         """
         results = self.get_results(start=step, end=step+1)
         xi_1, sigma_1, Z, Pz = _calc_derivatives(results, self.gamma_f)

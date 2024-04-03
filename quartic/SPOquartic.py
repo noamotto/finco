@@ -1,25 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+SPO propagation for Gaussian in quartic potential. Should be used reference and
+comparison to FINCO's results.
 
-This is a temporary script file.
+@author: Noam Ottolenghi
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from splitting_method import SplittingMethod
-
-a = 0.5
-b = 0.1
-chi = 2j
-gamma0 = 0.5
+from quartic import S0_0, V_0
 
 def psi0(x):
-    return (2*gamma0/np.pi)**0.25 * np.exp(-gamma0 * (x-np.conj(chi)/2/gamma0)**2-(chi.imag)**2/4/gamma0)
+    return np.exp(1j*S0_0(x))
 
 def H_p(x):
-    return a*x**2 + b*x**4
+    return V_0(x, 0)
 
 def H_k(p):
     return p ** 2 / 2
@@ -28,12 +25,14 @@ def H_k(p):
 T = 0.72
 # T = 2
 dt = T / 100
-spl = SplittingMethod(x0 = -50, x1 = 50, dx = 1e-2, 
+
+spl = SplittingMethod(x0 = -50, x1 = 50, dx = 1e-2,
                       T = T, dt = dt, trecord = dt, imag = False,
-                      psi0 = psi0, H_p = H_p, H_k = H_k) 
+                      psi0 = psi0, H_p = H_p, H_k = H_k)
 
 
 spl.propagate()
-   
+
+# Show small animation of the propagation. Uncomment if needed
 # spl.show_plots(0.02)
 # plt.plot(spl.x, np.abs(spl.psi))
