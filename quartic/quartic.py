@@ -6,7 +6,7 @@ state, as well as a class for mapping between initial conditions and trajectorie
 in time and functions for dealing with nonphysical contributions.
 
 Usage of the function dealing with nonphysical contributions can be seen in the
-caustic exploration scripts in this folder. Refer to `caustics_illustration.py`
+caustic exploration scripts in this folder. Refer to `caustics-illustration.py`
 for usage example.
 """
 
