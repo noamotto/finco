@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+SPO propagation for Gaussian in harmonic potential. Should be used reference and
+comparison to FINCO's results.
 
-This is a temporary script file.
+@author: Noam Ottolenghi
 """
 
 import numpy as np

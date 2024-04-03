@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
+Propagates and plots the trajectory in time and position spaces for one initial
+condition and four different configurations of entering and exiting the poles
+ladder for propagation in Eckart barrier potential. It is recommended to enlarge
+and use tight layout after the figure is produced.
 """
 
 #%% Setup
@@ -16,15 +17,30 @@ import matplotlib.pyplot as plt
 plt.rc('font', size=14)
 
 def plot_markers(x, ax, diff, **kwargs):
+    """
+    Adds arrow markers on plot with calculated direction
+
+    Parameters
+    ----------
+    x : ArrayLike of complex
+        Points on plot to put markers for. Used for calculation of position and
+        direction.
+    ax : matplotlib Axes
+        Axes to plot the markers into
+    diff : integer
+        Space between two markers. Marker is plotted once every `diff` points
+
+    All other parameters are passed to Axes.plot()
+    """
     for point in np.arange(diff, len(x), diff):
         direction = np.angle(x[point+1] - x[point]) / np.pi * 180
         ax.plot(np.real(x[point]), np.imag(x[point]), marker=(3,1,direction - 90), ms=10, **kwargs)
 
 T = 5500.
 qs = np.array([q_c])
-ics = create_ics(qs, S0 = S0, gamma_f=1)
+ics = create_ics(qs, S0 = S0)
 
-fig, ((t_o0, t_o1, t_o2, t_o3), 
+fig, ((t_o0, t_o1, t_o2, t_o3),
       (q_o0, q_o1, q_o2, q_o3)) = plt.subplots(2, 4, num='trajs-q-f', figsize=(14.4, 9.6))
 
 #%%
@@ -43,7 +59,7 @@ for q0, traj in trajs.groupby('q0'):
     E0 = p0**2/2/m - 1/q0
     M, S = np.meshgrid(np.arange(-2,3), [1,0])
     t_poles = eckart_pole(q_c, p_c, M, S)
-    
+
     t_o0.scatter(t_poles.real, t_poles.imag)
     t_o0.plot(np.real(t[:300]),      np.imag(t[:300]), 'r', lw=2)
     plot_markers(t[:300].to_numpy(), t_o0, 75, color='r')
@@ -86,7 +102,7 @@ for q0, traj in trajs.groupby('q0'):
     E0 = p0**2/2/m - 1/q0
     M, S = np.meshgrid(np.arange(-2,3), [1,0])
     t_poles = eckart_pole(q_c, p_c, M, S)
-    
+
     t_o1.scatter(t_poles.real, t_poles.imag)
     t_o1.plot(np.real(t[:200]),      np.imag(t[:200]), 'r', lw=2)
     plot_markers(t[:200].to_numpy(), t_o1, 50, color='r')
@@ -137,7 +153,7 @@ for q0, traj in trajs.groupby('q0'):
     E0 = p0**2/2/m - 1/q0
     M, S = np.meshgrid(np.arange(-2,3), [1,0])
     t_poles = eckart_pole(q_c, p_c, M, S)
-    
+
     t_o2.scatter(t_poles.real, t_poles.imag)
     t_o2.plot(np.real(t[:200]),      np.imag(t[:200]), 'r', lw=2)
     plot_markers(t[:200].to_numpy(), t_o2, 50, color='r')
@@ -188,7 +204,7 @@ for q0, traj in trajs.groupby('q0'):
     E0 = p0**2/2/m - 1/q0
     M, S = np.meshgrid(np.arange(-2,3), [1,0])
     t_poles = eckart_pole(q_c, p_c, M, S)
-    
+
     t_o3.scatter(t_poles.real, t_poles.imag)
     t_o3.plot(np.real(t[:200]),      np.imag(t[:200]), 'r', lw=2)
     plot_markers(t[:200].to_numpy(), t_o3, 50, color='r')
@@ -200,8 +216,8 @@ for q0, traj in trajs.groupby('q0'):
     plot_markers(t[600:800].to_numpy(), t_o3, 40, color='m')
     t_o3.plot(np.real(t[800:1000]),  np.imag(t[800:1000]), 'k', lw=2)
     plot_markers(t[800:1000].to_numpy(), t_o3, 100, color='k')
-    t_o3.plot(np.real(t[1000:1200]),  np.imag(t[1000:1200]), c=plt.cm.tab10(1), lw=2)
-    plot_markers(t[1000:1200].to_numpy(), t_o3, 50, color=plt.cm.tab10(1))
+    t_o3.plot(np.real(t[1000:1200]),  np.imag(t[1000:1200]), 'C1', lw=2)
+    plot_markers(t[1000:1200].to_numpy(), t_o3, 50, color='C1')
     t_o3.plot(np.real(t[1200:1400]),  np.imag(t[1200:1400]), 'b', lw=2)
     plot_markers(t[1200:1400].to_numpy(), t_o3, 50, color='b')
     t_o3.set_xlabel(r'$\Re t$')
@@ -220,8 +236,8 @@ for q0, traj in trajs.groupby('q0'):
     plot_markers(q[600:800].to_numpy(), q_o3, 40, color='m')
     q_o3.plot(np.real(q[800:1000]),  np.imag(q[800:1000]), 'k', lw=2)
     plot_markers(q[800:1000].to_numpy(), q_o3, 120, color='k')
-    q_o3.plot(np.real(q[1000:1200]),  np.imag(q[1000:1200]), c=plt.cm.tab10(1), lw=2)
-    plot_markers(q[1000:1200].to_numpy(), q_o3, 70, color=plt.cm.tab10(1))
+    q_o3.plot(np.real(q[1000:1200]),  np.imag(q[1000:1200]), 'C1', lw=2)
+    plot_markers(q[1000:1200].to_numpy(), q_o3, 70, color='C1')
     q_o3.plot(np.real(q[1200:1400]),  np.imag(q[1200:1400]), 'b', lw=2)
     plot_markers(q[1200:1400].to_numpy(), q_o3, 50, color='b')
     q_o3.set_xlabel(r'$\Re q$')

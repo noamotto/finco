@@ -1,66 +1,54 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Example of analytic following after the caustics in free potential (harmonic
+oscillator with omega=0).
 
-This is a temporary script file.
+Propagates a supergaussian :math:`~e^{-x^4}` in free potential and plots the
+location of the caustics, calculated analytically and shown be looking on the
+map of xi_1
+
+@author: Noam Ottolenghi
 """
+
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 
-from finco import propagate, create_ics, TimeTrajectory
+from finco import propagate, create_ics
 from utils import tripcolor_complex
-from finco.stokes import separate_to_blobs, find_caustics
+from ho_supergaussian import S0, m, HOTimeTrajectory
 
 #%% Setup
-
 plt.rc('font', size=14)
 
-import os
+gamma_f = 1
 
 try:
     os.mkdir('caustics-exploration')
 except FileExistsError:
     pass
 
-# System params
-m = 1
-omega = 0
-gamma_f = 1
+# Small hack to create free potential (didn't want to make a diffrent folder for it...)
+def free_V(q, _):
+    return np.zeros_like(q)
 
-def S0_0(q):
-    return -1j * (0.25 * np.log(2 / np.pi) - (q - 1)**4)
-    
-def S0_1(q):
-    return 4j *(q - 1)**3
-
-def S0_2(q):
-    return 12j *(q - 1)**2
-
-def V_0(q):
-    return 0.5 * m * omega**2 * q ** 2
-    
-def V_1(q):
-    return m * omega**2 * q
-
-def V_2(q):
-    return np.full_like(q,m * omega**2)
-
-class HOTimeTrajectory(TimeTrajectory):
-    def init(self, ics):
-        self.q0 = ics.q
-        
-    def t_0(self, tau):
-        return np.full_like(self.q0, 10*np.pi*tau)
-    
-    def t_1(self, tau):
-        return np.full_like(self.q0, 10*np.pi)
-    
-    def get_discontinuity_times(self):
-        return []
+V = [free_V, free_V, free_V]
 
 def locate_caustics_analytic(t):
+    """
+    Calculates the caustics position analytically for given time
+
+    Parameters
+    ----------
+    t : complex
+        Time to calculate for.
+
+    Returns
+    -------
+    caustics : list of length 2
+        the 2 calculated caustics positions.
+    """
     rhs = 1j * gamma_f / (6*(2*gamma_f/m*t-1j))
     return [1+rhs**0.5, 1-rhs**0.5]
 
@@ -68,9 +56,9 @@ def locate_caustics_analytic(t):
 
 X, Y = np.meshgrid(np.linspace(-2, 4, 61), np.linspace(-3, 3, 61))
 
-ics = create_ics(q0 = (X+1j*Y).flatten(), S0 = [S0_0, S0_1, S0_2], gamma_f=1)
+ics = create_ics(q0 = (X+1j*Y).flatten(), S0 = S0)
 
-result = propagate(ics, V = [V_0, V_1, V_2], m = m, gamma_f = gamma_f,
+result = propagate(ics, V = V, m = m, gamma_f = gamma_f,
                    time_traj = HOTimeTrajectory(), dt = 1e-3, drecord=1/100, n_jobs=3,
                    trajs_path=None)
 
@@ -78,14 +66,15 @@ _, ax = plt.subplots(nrows=1, ncols=3, num='caustics-free-supergaussian', figsiz
 for i, step in enumerate([0, 20, 100]):
     caustics = locate_caustics_analytic(t=step/100*10*np.pi)
     xi_1 = result.get_caustics_map(step).xi_1
-    
-    plt.sca(ax[i]), tripcolor_complex(np.real(ics.q0), np.imag(ics.q0), xi_1, absmin=0.2)
+
+    plt.sca(ax[i])
+    tripcolor_complex(np.real(ics.q0), np.imag(ics.q0), xi_1, absmin=0.2)
     ax[i].scatter(np.real(caustics), np.imag(caustics), s=10)
     ax[i].set_xlabel(r'$\Re q_0$')
     ax[i].set_xlim(-2, 4)
     ax[i].set_ylabel(r'$\Im q_0$')
     ax[i].set_ylim(-3, 3)
-    ax[i].set_title(r'$t={}\pi / \omega$'.format(int(step/100*10)))
+    ax[i].set_title(rf'$t={int(step/100*10)}\pi / \omega$')
 
 plt.tight_layout()
 plt.savefig('caustics-exploration/caustics-free-supergaussian.png')
