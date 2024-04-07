@@ -68,11 +68,27 @@ def V_2(q, t):
 V = [V_0, V_1, V_2]
 S0 = [S0_0, S0_1, S0_2]
 
+def sign(a):
+    """
+    Sign function treating 0 as negative
+
+    Parameters
+    ----------
+    a : ArrayLike
+        Input array.
+
+    Returns
+    -------
+    b : ArrayLike
+        Signs array, where b[i] = 1 if a[i] > 0 otherwise b[i] = -1
+    """
+    return (a > 0).astype(int) * 2 - 1
+
 def coulombg_pole(q0, p0, n=0):
     E0 = p0**2/2/m - 1/q0
-    sign = np.sign(q0.real)*np.sign(q0.imag)
-    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*sign*p0*q0 + 2*E0*q0 + 1)
-                                        + n*1j*np.pi*2)/2/E0**1.5/sign)
+    s = sign(q0.real)*sign(q0.imag)
+    return (-q0*p0/2/E0 + (m/2)**0.5 * (np.log((2*E0/m)**0.5*s*p0*q0 + 2*E0*q0 + 1)
+                                        + n*1j*np.pi*2)/2/E0**1.5/s)
 
 def coulombg_diff(q0, p0):
     return coulombg_pole(q0, p0, n=1) - coulombg_pole(q0, p0, n=0)

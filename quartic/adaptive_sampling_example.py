@@ -27,12 +27,12 @@ logging.getLogger('finco').setLevel(logging.DEBUG)
 
 n_iters = 7
 n_steps = 1
-sub_tol = (2e-1,1e3)
+sub_tol = (8e-2,1e2)
 
 #%% Run adaptive sampling
 X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 21), np.linspace(-2.5, 2.5, 21))
 result, mesh = adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = S0,
-                                 n_iters = n_iters, sub_tol = sub_tol, plot_steps=False,
+                                 n_iters = n_iters, sub_tol = sub_tol, plot_steps=True,
                                  V = V, m = m, gamma_f = 1,
                                  time_traj = QuarticTimeTrajectory(), dt = 1e-3,
                                  drecord=1 / n_steps, n_jobs=3)

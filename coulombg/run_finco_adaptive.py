@@ -22,7 +22,7 @@ from finco import adaptive_sampling
 
 
 def main():
-    logging.getLogger('finco').setLevel(logging.INFO)
+    logging.getLogger('finco').setLevel(logging.DEBUG)
 
     parser = argparse.ArgumentParser(description="Runs adaptive sampling for Coulomb ground state system")
     parser.add_argument('n', type=int, action='store', help="Order of circling poles to compute for")
@@ -34,7 +34,7 @@ def main():
 
     n_iters = 7
     n_steps = 1
-    sub_tol = (2e-1, 1e3)
+    sub_tol = (1e-1, 1e1)
     X, Y = np.meshgrid(np.linspace(1e-10, 15, 150), np.linspace(-15, 15, 300))
 
     adaptive_sampling(qs = (X+1j*Y).flatten(), S0 = S0,
