@@ -34,7 +34,7 @@ from numpy.typing import ArrayLike
 
 from .mesh import Mesh
 from .results import FINCOResults, results_from_data
-from .finco import FINCOConf, create_ics, propagate
+from .finco import FINCOConf, create_ics, propagate, hbar
 
 
 def _calc_E(u: pd.DataFrame, v: pd.DataFrame, gamma_f: float):
@@ -63,17 +63,24 @@ def _calc_E(u: pd.DataFrame, v: pd.DataFrame, gamma_f: float):
 
     """
     u_q0, v_q0 = u.q0.to_numpy(), v.q0.to_numpy()
+    u_S, v_S = u.S.to_numpy(), v.S.to_numpy()
     u_q, v_q = u.q.to_numpy(), v.q.to_numpy()
     u_p, v_p = u.p.to_numpy(), v.p.to_numpy()
-    u_Z, u_Pz = u.Z.to_numpy(), u.Pz.to_numpy()
+    u_Z = u.Z.to_numpy()
+    u_xi_1 = u.xi_1.to_numpy()
+    u_dS_dq0 = u_p * u_Z
 
     u_Z_est = (u_q - v_q) / (u_q0 - v_q0)
     u_Pz_est = (u_p - v_p) / (u_q0 - v_q0)
+    u_xi_1_est = 2 * gamma_f * u_Z_est - 1j/hbar*u_Pz_est
+    u_dS_dq0_est = (u_S - v_S) / (u_q0 - v_q0)
+    
+    S_diff = np.abs(u_dS_dq0_est - u_dS_dq0) / np.abs(u_dS_dq0)
+    xi_1_diff = np.abs(u_xi_1_est - u_xi_1) / np.abs(u_xi_1)
 
     pref_filter = (np.abs(u.pref.to_numpy()) > 1e-6) & (np.abs(v.pref.to_numpy()) > 1e-6)
 
-    return (np.abs(2 * gamma_f * (u_Z_est - u_Z) - 1j*(u_Pz_est - u_Pz))  /
-            u.xi_1.abs().to_numpy() * pref_filter)
+    return (S_diff + xi_1_diff) * pref_filter
 
 def _plot_step(mesh: Mesh, deriv: pd.DataFrame, candidate_inds: pd.DataFrame):
     """
@@ -96,7 +103,7 @@ def _plot_step(mesh: Mesh, deriv: pd.DataFrame, candidate_inds: pd.DataFrame):
         have a 'added' field indicating whether it was accepted or rejected.
     """
     plt.figure()
-    tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), deriv.xi_1, absmax=1e7)
+    tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), deriv.pref, absmax=1e7)
     scipy.spatial.delaunay_plot_2d(mesh.tri, plt.gca())
 
     rejected = candidate_inds[~candidate_inds.added]
@@ -156,7 +163,9 @@ def _get_points_data(result: FINCOResults, n_steps: int):
     """
     trajs = result.get_trajectories(n_steps)
     deriv = result.get_caustics_map(n_steps)
-    return trajs.merge(deriv.drop(columns='q0'), left_index=True, right_index=True)
+    S = result.get_results(n_steps).S
+    return (trajs.merge(deriv.drop(columns='q0'), left_index=True, right_index=True)
+                 .merge(S, left_index=True, right_index=True))
 
 def adaptive_sampling(qs, S0: list, n_iters: int,
                       sub_tol: Union[float, Tuple[float, float]],

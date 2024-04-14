@@ -478,6 +478,11 @@ def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
 
         shutil.copy(result.file_path, os.path.join(step_dir, 'step_0.hdf'))
 
+        if x is None:
+            logger.info("""No x values were given for wavfunction recunstruction. \
+                        Not reconstructing wavefunction""")
+            plot_steps = False
+                
         if plot_steps:
             # Keep a view to the starting point for wavefunction reconstruction
             if orig is None:
@@ -485,10 +490,6 @@ def caustic_times(result: FINCOResults, dir_func: CausticTimeCallback,
             else:
                 orig = get_view(orig, 1)
             n_jobs = kwargs.get('n_jobs', 1)
-
-            if x is None:
-                logger.info("""No x values were given for wavfunction recunstruction. \
-                            Not reconstructing wavefunction""")
 
             if S_F is None:
                 logger.info("No inital Berry factor was given for step plotting. \

@@ -93,6 +93,7 @@ def derivative(fx, dx, n=5, order=1):
     The calculated finite difference, as an approximation of the derivative.
 
     """
+    #TODO: scipy.misc.central_diff_weights will be removed soon. Replace with findiff.
     w = scipy.misc.central_diff_weights(n, order)
     return correlate(fx, w, mode='valid') / dx**order
 

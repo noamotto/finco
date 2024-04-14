@@ -3,24 +3,28 @@
 Analyzes and produces a wavefunction reconstruction of Coulomb ground state
 after 1 cycle, and produces a figure comparing it to the analytical solution.
 
+Note that while the plot contains the negaitve part of x for legacy reasons, as
+the system is only an analytic expansion of the positive part of x the negative
+part should be ignored.
+
 To produce the data needed for the reconstruction run the following:
 > python ./run_finco_adaptive.py -t 1 -o res_adaptive_0_15_15_15_t_1 0
 > python ./run_finco_adaptive.py -t 1 -o res_adaptive_0_15_15_15_t_1 1
 > python ./run_finco_adaptive.py -t 1 -o res_adaptive_0_15_15_15_t_1 2
-> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_0.hdf
-> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_1.hdf
-> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_2.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_0_0.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_1_0.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_1/coulombg_2_0.hdf
+And extract the contents of the produced .tar.gz files in your working directory.
 """
 
 #%% Setup
 import os
-
-from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle
+import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
-import logging
 
+from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle
 from finco import load_results
 
 plt.rc('font', size=14)
@@ -38,28 +42,28 @@ try:
 except FileExistsError:
     pass
 
-res0 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_0.hdf')
-res1 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_1.hdf')
-res2 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_2.hdf')
+res0 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_0_0.hdf')
+res1 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_1_0.hdf')
+res2 = load_results('res_adaptive_0_15_15_15_t_1/coulombg_2_0.hdf')
     
 #%% Stokes treatment
 logger.info('Starting treating Stokes')
 
 logger.info('Dealing with order 0')
 caustics0 = locate_caustics(res0, 0, T, n_jobs=n_jobs)
-ts0 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_0.hdf.ct_steps/last_step.hdf').
+ts0 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_0_0.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F0 = eliminate_stokes(res0, caustics0)
 
 logger.info('Dealing with order 1')
 caustics1 = locate_caustics(res1, 1, T, n_jobs=n_jobs)
-ts1 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_1.hdf.ct_steps/last_step.hdf').
+ts1 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_1_0.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F1 = eliminate_stokes(res1, caustics1)
 
 logger.info('Dealing with order 2')
 caustics2 = locate_caustics(res2, 2, T, n_jobs=n_jobs)
-ts2 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_2.hdf.ct_steps/last_step.hdf').
+ts2 = (load_results('res_adaptive_0_15_15_15_t_1/coulombg_2_0.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F2 = eliminate_stokes(res2, caustics2)
 

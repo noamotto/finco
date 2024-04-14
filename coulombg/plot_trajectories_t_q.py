@@ -4,6 +4,8 @@ Propagates and plots the trajectory in time and position spaces for one initial
 condition and three different "orders" of circling poles in time, ending after
 one cycle. It is recommended to enlarge and use tight layout after the figure
 is produced.
+
+@author: Noam Ottolenghi
 """
 
 #%% Setup
@@ -19,13 +21,28 @@ from finco import propagate, create_ics
 plt.rc('font', size=14)
 
 def plot_markers(x, ax, diff, **kwargs):
+    """
+    Adds arrow markers on plot with calculated direction
+
+    Parameters
+    ----------
+    x : ArrayLike of complex
+        Points on plot to put markers for. Used for calculation of position and
+        direction.
+    ax : matplotlib Axes
+        Axes to plot the markers into
+    diff : integer
+        Space between two markers. Marker is plotted once every `diff` points
+
+    All other parameters are passed to Axes.plot()
+    """
     for point in np.arange(diff, len(x), diff):
         direction = np.angle(x[point+1] - x[point]) / np.pi * 180
         ax.plot(np.real(x[point]), np.imag(x[point]), marker=(3,1,direction - 90), ms=7, **kwargs)
 
 T = 1*2*halfcycle
 qs = np.array([1+1j])
-ics = create_ics(qs, S0 = S0, gamma_f=1)
+ics = create_ics(qs, S0 = S0)
 
 try:
     os.mkdir('system_exploration')
@@ -46,6 +63,7 @@ result = propagate(ics,
 
 trajs = result.get_trajectories(1)
 for q0, traj in trajs.groupby('q0'):
+    q0 = np.array([q0])
     p0 = S0[1](q0)
     t = traj.t
     q = traj.q
@@ -84,6 +102,7 @@ result = propagate(ics,
 
 trajs = result.get_trajectories(1)
 for q0, traj in trajs.groupby('q0'):
+    q0 = np.array([q0])
     p0 = S0[1](q0)
     t = traj.t
     q = traj.q
@@ -117,7 +136,7 @@ for q0, traj in trajs.groupby('q0'):
 
 #%% Order 2
 
-order = 4
+order = 2
 result = propagate(ics,
                    V = V, m = m, gamma_f=1,
                    time_traj = CoulombGTimeTrajectory(n=order, t=T),
@@ -125,6 +144,7 @@ result = propagate(ics,
 
 trajs = result.get_trajectories(1)
 for q0, traj in trajs.groupby('q0'):
+    q0 = np.array([q0])
     p0 = S0[1](q0)
     t = traj.t
     q = traj.q
@@ -164,5 +184,6 @@ for q0, traj in trajs.groupby('q0'):
     q_o2.set_xlabel(r'$\Re q$')
     q_o2.set_ylabel(r'$\Im q$')
 
+#%% Finalize figure and save
 fig.tight_layout()
 fig.savefig('system_exploration/trajs_q_f.png')

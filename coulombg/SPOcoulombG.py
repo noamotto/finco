@@ -1,43 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+SPO propagation for Gaussian in quartic potential. Should be used reference and
+comparison to FINCO's results.
 
-This is a temporary script file.
+@author: Noam Ottolenghi
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from splitting_method import SplittingMethod
 
-q = 1
-keldysh = 1
-omega = 7.35e-2
-A0 = -omega / keldysh
+q_e = 1
 
 def psi0(x):
     return 2*x*np.exp(-np.abs(x))
 
-# def H_p(x):
-#     cutoffRad = 750
-#     cutoffStrength = 1e-3j
-    
-#     coulomb = -q/np.abs(x)
-#     cutoff = (x > cutoffRad) * (-cutoffStrength * (x - cutoffRad)**2) + \
-#         (x < -cutoffRad) * (-cutoffStrength * (x + cutoffRad)**2)
-#     return coulomb + cutoff
-# def psi0(x):
-#     return np.exp(-(x-1)**4)
-
 def H_p(x):
-    return x**2
+    cutoff_rad = 750
+    cutoff_strength = 1e-3j
+    
+    coulomb = -q_e/np.abs(x)
+    cutoff = (x > cutoff_rad) * (-cutoff_strength * (x - cutoff_rad)**2) + \
+        (x < -cutoff_rad) * (-cutoff_strength * (x + cutoff_rad)**2)
+    return coulomb + cutoff
 
 def H_k(p):
     return p ** 2 / 2
-
-
-# halfcycle = np.pi / omega
-# dt = 0.01
 
 halfcycle = 2 * np.pi
 t =  3 * 2 * halfcycle
@@ -51,4 +39,3 @@ while spl.t < spl.T:
     spl.propagate()
    
 spl.show_plots(0.2)
-# plt.plot(spl.x, np.abs(spl.psi))

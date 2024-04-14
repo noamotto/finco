@@ -4,17 +4,19 @@ The main module in FINCO. Contains an implementation of the FINCO propagation
 algorithm.
 
 The core feature of this algorithm is the ability to propagate a wavepacket
-in time using semi-classical trajectories. The computation employs two types
-of parallelization, by working in vectorized fashion on a set of trajectories
-and an by allowing propagation using concurrent workers.
+in time using semi-classical trajectories.
 
-The object supports this propagation, as well as saving the results for
-analysis and wavepacket reconstruction in a persistent file.
+The algorithm supports custom trajectories in time using a TimeTrajectory object.
+The algorithm propagates the system in time using a parametrized trajectory,
+with parameter tau in range [0,1), and uses a provided TimeTrajectory to translate
+it into position and derivative in temporal space.
 
-In addition, the algorithm supports custom trajectories in time. The
-algorithm propagates the system in time using a parametrized trajectory,
-with parameter tau in range [0,1), and uses a provided time function t(tau)
-and its first derivative (via the 't' parameter) to allow custom trajectories.
+For efficiency, the algorithm employs two types of parallelization, by allowing
+working  in vectorized fashion on blocks of trajectories and by allowing propagation
+of blocks in parallel.
+
+In addition, the algorithm allows saving the results for analysis and wavepacket
+reconstruction in a file.
 
 All the FINCO propagation functions share the same parameters, given here:
 
@@ -37,7 +39,7 @@ All the FINCO propagation functions share the same parameters, given here:
     Optional Parameters
     -------------------
     blocksize : int
-        Number of trajectories to process in parallel. The default is 1024.
+        Block size of trajectories to process in vectorized fashion. The default is 1024.
     n_jobs : int
         Number of concurrent workers to use while propagating. Refer to
         joblib's documentation for more details. The default is 1.
@@ -103,7 +105,7 @@ def create_ics(q0: ArrayLike, S0: ArrayLike, t0: Optional[ArrayLike] = None):
         - t_index : Trajectory index
         - timestep : Timestep of entry
 
-        This is the expected index from diatasets in the library
+        This is the expected index from datasets in the library
     """
     Ss = S0[0](q0)
     ps = S0[1](q0)
@@ -168,7 +170,7 @@ class FINCOConf:
         self.__dict__ = d
 
 
-def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
+def calc_xi_1(sol, S_20, t_0: float, t_1: float, gamma_f: float,
               ref_angle: Optional[ArrayLike] = None) -> [ArrayLike, ArrayLike,
                                                          ArrayLike, ArrayLike]:
     """
@@ -180,6 +182,8 @@ def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
     sol : Solution functional
         A solution function that takes a time parameter and returns the
         trajectories' parameters at that time.
+    S_20 : ArrayLike
+        Array of the initial values of the second spatial derivative of S
     t_0 : float in [0, 1]
         Initial time parameter.
     t_1 : float in [0, 1]
@@ -200,9 +204,10 @@ def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
     xi_1_angle_1: ArrayLike of float
         The angle of xi_1 at t1.
     """
-    res = np.array([sol(t) for t in np.linspace(t_0, t_1, 50)]).T.reshape((5,-1,50))
-    Mp, Mq = res[3:]
-    xi_1 = 2 * gamma_f * Mq - 1j / hbar * Mp
+    res = np.array([sol(t) for t in np.linspace(t_0, t_1, 50)]).T.reshape((7,-1,50))
+    Mpp, Mpq, Mqp, Mqq = res[3:]
+    xi_1 = (2 * gamma_f * (Mqq + S_20[:,np.newaxis] * Mpq) -
+            1j / hbar * (Mqp + S_20[:,np.newaxis] * Mpp))
 
     xi_1_angle = np.angle(xi_1)
     if ref_angle is not None:
@@ -212,7 +217,7 @@ def calc_xi_1(sol, t_0: float, t_1: float, gamma_f: float,
 
     return xi_1_abs[:,0], xi_1_abs[:,-1], xi_1_angle[:,0], xi_1_angle[:,-1]
 
-def calc_xis(sol, Ts: ArrayLike, gamma_f: float,
+def calc_xis(sol, S_20, Ts: ArrayLike, gamma_f: float,
              ref_angle: Optional[ArrayLike] = None) -> [ArrayLike, ArrayLike]:
     """
     Calculates the norm and angle of xi_1 at sampled times Ts using a
@@ -223,6 +228,8 @@ def calc_xis(sol, Ts: ArrayLike, gamma_f: float,
     sol : Solution functional
         A solution function that takes a time parameter and returns the
         trajectories' parameters at that time.
+    S_20 : ArrayLike
+        Array of the initial values of the second spatial derivative of S
     Ts : ArrayLike of floats in range [0, 1]
         Times to sample xi_1 at. Expected to be sorted in ascending way.
     gamma_f : float
@@ -240,13 +247,13 @@ def calc_xis(sol, Ts: ArrayLike, gamma_f: float,
     xi_1_angle = [None] * len(Ts)
     xi_1_abs = [None] * len(Ts)
 
-    xi_1_abs[0], _, xi_1_angle[0], _ = calc_xi_1(sol, Ts[0], Ts[1], gamma_f)
+    xi_1_abs[0], _, xi_1_angle[0], _ = calc_xi_1(sol, S_20, Ts[0], Ts[1], gamma_f)
     if ref_angle is not None:
         xi_1_angle[0] = ref_angle
 
     for i in range(len(Ts) - 1):
-        _, xi_1_abs[i+1], _, xi_1_angle[i+1] = calc_xi_1(sol, Ts[i], Ts[i+1], gamma_f,
-                                                ref_angle)
+        _, xi_1_abs[i+1], _, xi_1_angle[i+1] = calc_xi_1(sol, S_20, Ts[i], Ts[i+1],
+                                                         gamma_f, ref_angle)
         ref_angle = xi_1_angle[i+1]
 
     return np.stack(xi_1_abs).T, np.stack(xi_1_angle).T
@@ -281,22 +288,21 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
     Returns
     -------
     results : ArrayLike
-        The propagation results, as an array of (7*n_trajectories, n_timesteps)
+        The propagation results, as an array of (8*n_trajectories, n_timesteps)
         Where the columns are:
             - t: The trajectory's time at the timestep
             - q: The trajectory's position at the timestep
             - p: The trajectory's momentum at the timestep
             - S: The trajectory's action at the timestep
-            - xi_1_abs: The trajectory's norm of xi_1 at the timestep
-            - xi_1_angle: The trajectory's phase of xi_1 at the timestep
-            - S_2: The trajectory's action's second derivative at the timestep
+            - M_pp, M_pq, M_qp, M_qq : The stability matrix elements
     """
     # Prepare for propagation and propagate
+    # TODO: Reinroduce angle unwrapping and calculation here and in result appending below.
 
     # Parameter order: q, p, S, M_pp, M_pq, M_qp, M_qq
     y0 = np.concatenate([ics.q, ics.p, ics.S, ics.Mpp, ics.Mpq, ics.Mqp, ics.Mqq])
 
-    # ref_angle = ics.xi_1_angle
+    # ref_angle = np.angle(2 * gamma_f - 1j / hbar * ics.S_20)
     time_traj.init(ics)
     discont_times = time_traj.get_discontinuity_times()
     results = []
@@ -314,15 +320,13 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
         if res.status != 0:
             return None
 
-        # TODO: Reinroduce angle unwrapping and calculation here and in result appending below.
-        # xi_1_abs, xi_1_angle = calc_xis(res.sol, [t0] + list(t_eval) + [t1],
-        #                        gamma_f, ref_angle)
+        # xi_1_abs, xi_1_angle = calc_xis(res.sol, ics.S_20.to_numpy(), [t0] + list(t_eval) + [t1],
+        #                         gamma_f, ref_angle)
         # ref_angle = xi_1_angle[:,-1]
 
         y0 = res.sol(t1)
         if len(t_eval) > 0:
             result = res.y.reshape(7, -1, len(res.t))
-            # S_2 = (result[3] / result[4])[np.newaxis,:]
             t = np.array([time_traj.t_0(tau) for tau in res.t]).T[np.newaxis,:]
             # result[3], result[4] = xi_1_abs[:,1:-1], xi_1_angle[:,1:-1]
             result = np.concatenate((t, result))
@@ -333,7 +337,6 @@ def propagate_traj(ics: pd.DataFrame, V: ArrayLike, m: float,
 def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     """
     Propagates the system in time, given a set of initial conditions.
-    Currently assumes the propagation starts at t=0.
 
     Parameter list is specified at the module documentation
 
@@ -348,6 +351,10 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     results : FINCOReader
         The propagation results.
     """
+    def split_df(df, nblocks):
+        idxs = np.arange(len(df))
+        return [df.iloc[blk] for blk in np.array_split(idxs, nblocks)]
+        
     def process_block(block):
         return propagate_traj(block, conf.V, conf.m, time_traj=conf.time_traj,
                               max_step=conf.dt, Ts=Ts)
@@ -359,7 +366,7 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
     #prepare slices
     n_jobs = conf.n_jobs if conf.n_jobs > 0 else cpu_count() + 1 + conf.n_jobs
     nslices = int(np.ceil(ics.q.size / conf.blocksize / n_jobs))
-    slices = np.array_split(ics, nslices)
+    slices = split_df(ics, nslices)
 
     logger.debug("Starting propagation of %d trajectories in %d slices",
                 len(ics), nslices)
@@ -369,7 +376,7 @@ def propagate(ics: pd.DataFrame, **kwargs) -> FINCOResults:
             for slc in tqdm(slices, disable=not conf.verbose):
                 #prepare blocks
                 nblocks = int(np.ceil(slc.shape[0] / conf.blocksize))
-                blocks = np.array_split(slc, nblocks)
+                blocks = split_df(slc, nblocks)
 
                 results = parallel(delayed(process_block)(block)
                                    for block in blocks)

@@ -25,9 +25,9 @@ from utils import tripcolor_complex
 logging.basicConfig()
 logging.getLogger('finco').setLevel(logging.DEBUG)
 
-n_iters = 7
+n_iters = 15
 n_steps = 1
-sub_tol = (8e-2,1e2)
+sub_tol = (1.5e-1,1e2)
 
 #%% Run adaptive sampling
 X, Y = np.meshgrid(np.linspace(-2.5, 2.5, 21), np.linspace(-2.5, 2.5, 21))

@@ -1,23 +1,47 @@
 # -*- coding: utf-8 -*-
 """
-Produces the maps of xi_1 and prefactor for "order" n=6 in propagation of 3 cycles.
+Produces the exaploration figures for "order" n=6 in propagation of 3 cycles.
 
-To produce the data needed for the exploration run the following:
+The script loads a results dataset and caustic time algorithm serch results dataset
+for this order and draws the following images:
+- Maps of xi_1 and the prefactor, to show how much contributing regions are there
+for this "order" and where the caustics are. Note the tail region in the prefactor
+map that goes towards large real positive q.
+- The prefactor map segmented with two higlights. The red highlight marks the
+nonphysical parts according to Stokes treatment and caustic times algorithm results,
+and the green highlight marks the tail region.
+- Map of final positions for the trajectories, where the color of each dot is
+taken from the prefactor map. (a) is a map of all trajectories, (b) contains
+only the physical, non-diverging ones, and (c) contins only the tail region. Note
+that the contributing and nondiverging parts tend to be close to the real axis.
+- Map of the times at which each trajectory finished circumnavigating poles, where
+the color of each dot is taken from the prefactor map. (a) is a map of all
+trajectories, (b) contains only the physical, non-diverging ones, and (c) contins
+only the tail region. Note that the contributing and nondiverging parts tend to
+be close to the final time T~37.7.
+- Reconstruction of the wavefunction from this order. In blue is the analytic
+form of the ground state, in orange is FINCO's reconstruction, and in green is
+the reconstruction from the tail region only. Solid line is real part and dashed
+is imaginary part.
+
+To produce the data needed for this script run the following:
 > python ./run_finco_adaptive.py -t 3 -o res_adaptive_0_15_15_15_t_3 6
-> python ./caustic_times.py res_adaptive_0_15_15_15_t_3/coulombg_6.hdf
+> python ./caustic_times.py res_adaptive_0_15_15_15_t_3/coulombg_6_0.hdf
+And extract the contents of the produced .tar.gz files in your working directory.
+
+@author: Noam Ottolenghi
 """
 
 #%% Setup
 import os
-
-from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle, CoulombGTimeTrajectory
+import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
-import logging
 
 from finco import load_results
+from coulombg import locate_caustics, eliminate_stokes, n_jobs, halfcycle, CoulombGTimeTrajectory
 from utils import tripcolor_complex, complex_to_rgb
 
 plt.rc('font', size=14)
@@ -35,29 +59,29 @@ try:
 except FileExistsError:
     pass
 
-res = load_results('res_adaptive_0_15_15_15_t_3/coulombg_6.hdf')
+res = load_results('res_adaptive_0_15_15_15_t_3/coulombg_6_0.hdf')
 trajs = res.get_trajectories(1)
 deriv = res.get_caustics_map(1)
-    
+
 #%% Stokes treatment
 caustics = locate_caustics(res, 6, T, n_jobs=n_jobs)
-ts = (load_results('res_adaptive_0_15_15_15_t_3/coulombg_6.hdf.ct_steps/last_step.hdf').
+ts = (load_results('res_adaptive_0_15_15_15_t_3/coulombg_6_0.hdf.ct_steps/last_step.hdf').
           get_results(1).t)
 S_F = eliminate_stokes(res, caustics)
-    
+
 #%% Produce maps
 fig, (xi_1, prefactor) = plt.subplots(1, 2, num='pref_xi_1', figsize=(9.6, 4.8))
 
-plt.sca(prefactor), tripcolor_complex(np.real(trajs.q0), np.imag(trajs.q0),
-                                      trajs.pref, absmax=1e7)
+plt.sca(prefactor)
+tripcolor_complex(np.real(trajs.q0), np.imag(trajs.q0), trajs.pref, absmax=1e7)
 prefactor.set_xlim(0,15)
 prefactor.set_ylim(-15,15)
 prefactor.set_xlabel(r'$\Re q_0$')
 prefactor.set_ylabel(r'$\Im q_0$')
 prefactor.set_title(r'$\phi$')
 
-plt.sca(xi_1), tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), 
-                                 deriv.xi_1, absmax=1e2)
+plt.sca(xi_1)
+tripcolor_complex(np.real(deriv.q0), np.imag(deriv.q0), deriv.xi_1, absmax=1e2)
 xi_1.set_xlim(0,15)
 xi_1.set_ylim(-15,15)
 xi_1.set_xlabel(r'$\Re q_0$')
@@ -149,15 +173,15 @@ psi_stokes = res.reconstruct_psi(x, 1, stokes_mask, n_jobs=n_jobs)
 psi_tail = res.reconstruct_psi(x, 1, tail_mask, n_jobs=n_jobs)
 
 plt.figure('reconstruction')
-plt.plot(x, np.real(y), c=plt.cm.tab10(0))
-plt.plot(x, np.imag(y), ':', c=plt.cm.tab10(0))
-plt.plot(x, np.real(psi_stokes), c=plt.cm.tab10(1))
-plt.plot(x, np.imag(psi_stokes), ':', c=plt.cm.tab10(1))
-plt.plot(x, np.real(psi_tail), c=plt.cm.tab10(2))
-plt.plot(x, np.imag(psi_tail), ':', c=plt.cm.tab10(2))
+plt.plot(x, np.real(y), c='C0')
+plt.plot(x, np.imag(y), ':', c='C0')
+plt.plot(x, np.real(psi_stokes), c='C1')
+plt.plot(x, np.imag(psi_stokes), ':', c='C1')
+plt.plot(x, np.real(psi_tail), c='C2')
+plt.plot(x, np.imag(psi_tail), ':', c='C2')
 
 plt.xlabel(r'$x$')
-plt.legend([r'QM $Re(\psi)$', r'QM $Im(\psi)$', 
+plt.legend([r'QM $Re(\psi)$', r'QM $Im(\psi)$',
             r'FINCO+Stokes treatment $Re(\psi)$', r'FINCO+Stokes treatment $Im(\psi)$',
             r'FINCO+tail only $Re(\psi)$', r'FINCO+tail only $Im(\psi)$'], fontsize=10)
 plt.tight_layout()

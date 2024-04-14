@@ -76,7 +76,7 @@ def _calc_projection(results: pd.DataFrame, gamma_f: float) -> [pd.Series, pd.Se
         Peak momentum of the trajectory's Gaussian projection on
         the real axis at timestep
     xi : pandas.Series of complex
-        Trajectory's Hubber-Heller projection map at timestep
+        Trajectory's Huber-Heller projection map at timestep
     sigma : pandas.Series of complex
         Exponent resulting from the projection as defined in the paper
     """
@@ -221,9 +221,9 @@ class FINCOResults:
                 datadict = file.get(key='results').__getstate__()
         else:
             datadict = self.data.__getstate__()
-            
+
         datadict['gamma_f'] = self.gamma_f
-        
+
         return datadict
 
     def __repr__(self):
@@ -235,6 +235,10 @@ class FINCOResults:
         return f"FINCO results dataset in memory with {self.data.size} entries"
 
     def _populate_data(self):
+        """
+        Populates information about the dataset. Helps Spyder and probably other
+        IDEs with instances of this class.
+        """
         if self.file_path is not None:
             with pd.HDFStore(path=self.file_path, mode='r', complevel=5) as file:
                 desc = file.select(key='results', iterator=True, chunksize=1000)
