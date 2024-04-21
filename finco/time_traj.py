@@ -354,6 +354,23 @@ class OdeSolTraj(TimeTrajectory):
         dtau = np.finfo(np.float64).eps
         return ((self.sol(tau + dtau) - self.sol(tau)) / dtau)[:self.n]
 
+    def other(self, tau):
+        """
+        Returns the other propagation result parameters
+
+        Parameters
+        ----------
+        tau : float in [0,1]
+            Time trajectory parameter
+
+        Returns
+        -------
+        vals : ArrayLike
+            The values of the solution other than the first n items (time)
+
+        """
+        return self.sol(tau)[self.n:]
+
     def length(self):
         taus = np.linspace(self.t0, self.t1, 3000)
         ts = np.stack([self.t_0(t) for t in taus])
