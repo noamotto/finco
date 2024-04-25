@@ -44,18 +44,33 @@ def S0_mock(_):
 
 S0 = [S0_mock] * 3
 
-def V_0(q, t):
+def V_0(q, _):
     return -q_e / q - A0 * q
 
-def V_1(q, t):
+def V_1(q, _):
     return q_e / q**2 - A0
 
-def V_2(q, t):
+def V_2(q, _):
     return -2 * q_e / q**3
 
 V_constfield = [V_0, V_1, V_2]
 
-class ZeroLocatorTraj(SequentialTraj):
+class PointLocatorTraj(SequentialTraj):
+    """
+    Trajectory for locating a point of interest in higher Riemann sheet. Used here
+    to locate poles and zero where it is hard to calculate them analytically.
+
+    Practically just circles the origin in position space once at given radius
+    and then moves to the point of interest.
+
+    Parameters
+    ----------
+    r : float
+        Circumnavigation radius. Given to dictate to what sheet to move into and
+        so the position of the point of interest.
+    qstar : complex
+        Point of interest to reach in the end.
+    """
     def __init__(self, r, qstar):
         super().__init__(t0=0, t1=1)
         self.r = r
@@ -72,6 +87,16 @@ class ZeroLocatorTraj(SequentialTraj):
         return self
 
 class TestTraj(SequentialTraj):
+    """
+    Trajectory used in this example to simulate the three behaviors. Practically
+    just circles the origin once in position space at given radius.
+
+    Parameters
+    ----------
+    r : float
+        Circumnavigation radius. Given to dictate to what sheet to move into and
+        so the trajectory's behavior in time.
+    """
     def __init__(self, r):
         super().__init__(t0=0, t1=1)
         self.r = r
@@ -104,9 +129,9 @@ s = np.linspace(0.3,1,100)
 #%% Run
 
 # Locate relevant momentum poles
-pole0 = Space2TimeTraj(t0=0, t1=1, q_traj=ZeroLocatorTraj(r_nojump, 1e-3),
+pole0 = Space2TimeTraj(t0=0, t1=1, q_traj=PointLocatorTraj(r_nojump, 1e-3),
                        V=V_constfield, m=m, max_step=1e-4).init(ics)
-pole1 = Space2TimeTraj(t0=0, t1=1, q_traj=ZeroLocatorTraj(r_jump, 1e-3),
+pole1 = Space2TimeTraj(t0=0, t1=1, q_traj=PointLocatorTraj(r_jump, 1e-3),
                        V=V_constfield, m=m, max_step=1e-4).init(ics)
 
 poles = np.array([pole0.t_0(1), pole1.t_0(1)])
@@ -114,7 +139,7 @@ poles = np.array([pole0.t_0(1), pole1.t_0(1)])
 # Locate relevant momentum zeros
 zero1 = Space2TimeTraj(t0=0, t1=1, q_traj=LineTraj(t0=0, t1=1, a=q0, b=qstars[0]),
                        V=V_constfield, m=m, max_step=1e-4).init(ics)
-zero2 = Space2TimeTraj(t0=0, t1=1, q_traj=ZeroLocatorTraj(r_field, qstars[1]),
+zero2 = Space2TimeTraj(t0=0, t1=1, q_traj=PointLocatorTraj(r_field, qstars[1]),
                        V=V_constfield, m=m, max_step=1e-4).init(ics)
 
 zeros = np.array([zero1.t_0(1), zero2.t_0(1)])

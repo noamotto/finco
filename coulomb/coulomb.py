@@ -25,8 +25,8 @@ from joblib import cpu_count
 from finco.time_traj import SequentialTraj,LineTraj,CircleTraj
 from finco.coord2time import Space2TimeTraj
 
-m =1
-keldysh = 1e4
+m = 1
+keldysh = 1e0
 omega = 7.35e-2
 A0 = -omega / keldysh
 q_e = 1
