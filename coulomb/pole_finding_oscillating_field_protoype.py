@@ -3,14 +3,14 @@ Prototype of position trajectory manipulation for locating poles.
 
 The script is a prototype of locating the poles in oscillating field by mutating
 the radius of circumnavigation for points. The procedure is as follows:
-    
+
     1. An initial guess based on a constant field is taken (here for 10 poles
        and only pole jumps)
     2. The trajectory in time is built, and a set points on it are chosen.
     3. For each point it is calculated where it is w.r.t. the two radii at the
     current time and position, and a small manipluation to the radius is added
     to "push" the trajectory the two radii.
-    
+
 Remarks
 =======
 
@@ -36,7 +36,7 @@ from coulomb import m, A0, q_e, V as V_field
 from finco import create_ics
 from finco.time_traj import SequentialTraj, LineTraj, CircleTraj, TimeTrajectory
 from finco.coord2time import Space2TimeTraj
-    
+
 def S0_mock(_):
     """
     Mock S0 funcion to manually set initial momenta
@@ -50,7 +50,18 @@ def S0_mock(_):
 
 S0 = [S0_mock] * 3
 
-class TestTraj(SequentialTraj):
+class InitialGuessTraj(SequentialTraj):
+    """
+    A trajectory for the initial guess in the process. Circumnavigates the
+    origin a given amount of times with fixed radius.
+
+    Parameters
+    ----------
+    r : float
+        Circumnavigation radius.
+    n : TYPE
+        Number of circumnavigations..
+    """
     def __init__(self, r, n):
         super().__init__(t0=0, t1=1)
         self.r = r
@@ -69,21 +80,46 @@ class TrajFromPoints(TimeTrajectory):
     def __init__(self, s, qs):
         self.s = s
         self.interp = interp1d(s, qs)
-        
-    def init(self, ics):
+
+    def init(self, _):
         return self
-        
+
     def t_0(self, tau):
         return self.interp(tau)
-    
+
     def t_1(self, tau):
         dtau = np.finfo(np.float64).eps
         if tau + dtau > 1:
             return -(self.interp(tau) - self.interp(tau - dtau)) / dtau
         return (self.interp(tau + dtau) - self.interp(tau)) / dtau
-    
+
     def get_discontinuity_times(self):
         return []
+    
+class StepTraj(SequentialTraj):
+    """
+    A trajectory for a step in the process.
+    Consists of an interpolation of the current radii and a straight line moving to it.
+
+    Parameters
+    ----------
+    r : float
+        Circumnavigation radius.
+    n : TYPE
+        Number of circumnavigations..
+    """
+    def __init__(self, s, qs):
+        super().__init__(t0=0, t1=1)
+        self.s = s
+        self.qs = qs
+
+    def init(self, ics):
+        q0 = ics.q.to_numpy()
+        self.path = [LineTraj(t0=0, t1=0.1, a=q0, b=self.qs[0,0]),
+                     TrajFromPoints(self.s, self.qs)]
+        self.discont_times = [0.1]
+
+        return self
 
 def get_rs(A0, q0, p0):
     """
@@ -122,94 +158,95 @@ qstars = np.concatenate([(-E0+(E0**2-4*A0*q_e)**0.5)/2/A0,
                          (-E0-(E0**2-4*A0*q_e)**0.5)/2/A0])
 qstars = qstars[np.argsort(np.abs(qstars))]
 rs = np.abs(qstars) * q0 / np.abs(q0)
-r_nojump = rs[0] * 0.9
 r_jump = 0.9 * rs[0] + 0.1 * rs[1]
-r_field = rs[1] / 0.95
 
-s = np.linspace(0,1,10000)
+step_sample = np.linspace(0.1,1,15000)
+plot_sample = np.linspace(0,1,10000)
 
 #%% Initial step
-jump = Space2TimeTraj(t0=0, t1=1, q_traj=TestTraj(r_jump, n=10), V=V_field,
+jump = Space2TimeTraj(t0=0, t1=1, q_traj=InitialGuessTraj(r_jump, n=10), V=V_field,
                       m=m, max_step=1e-4).init(ics)
+new_jump = jump
 
 #%% Plot initial step
-ts = np.array([jump.t_0(_s) for _s in s])
-qs = np.array([jump.q_traj.t_0(_s) for _s in s])
-ps = np.array([jump.p(_s) for _s in s])
+ts = np.array([jump.t_0(s) for s in plot_sample])
+qs = np.array([jump.q_traj.t_0(s) for s in plot_sample])
+ps = np.array([jump.p(s) for s in plot_sample])
 
 _, (q, p, tau) = plt.subplots(1, 3, num='const_jump', figsize=(14,4))
-vals = q.scatter(qs.real, qs.imag, c=s, s=3, cmap='cool')
+vals = q.scatter(qs.real, qs.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=q)
 q.scatter(0, 0, c='r')
 q.set_title(r'$q$')
 q.set_xlabel(r'$\Re q$')
 q.set_ylabel(r'$\Im q$')
 
-vals = p.scatter(ps.real, ps.imag, c=s, s=3, cmap='cool')
+vals = p.scatter(ps.real, ps.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=p)
 p.set_title(r'$p$')
 p.set_xlabel(r'$\Re p$')
 p.set_ylabel(r'$\Im p$')
 
-vals = tau.scatter(ts.real, ts.imag, c=s, s=3, cmap='cool')
+vals = tau.scatter(ts.real, ts.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=tau)
 tau.set_title(r'$t$')
 tau.set_xlabel(r'$\Re t$')
 tau.set_ylabel(r'$\Im t$')
 
 plt.tight_layout()
-
-new_jump = jump
 #%% Do step
 
-s = np.abs(ps)
-s = np.cumsum(np.abs(ps))
-s -= s[0]
-s /= s[-1]
-ts = np.array([new_jump.t_0(_s) for _s in s])
-qs = np.array([new_jump.q_traj.t_0(_s) for _s in s])
-ps = np.array([new_jump.p(_s) for _s in s])
+# Sample points
+ts = np.array([new_jump.t_0(s) for s in step_sample])
+qs = np.array([new_jump.q_traj.t_0(s) for s in step_sample])
+ps = np.array([new_jump.p(s) for s in step_sample])
 
+# Locate "problematic" points
 As = (V_field[0](qs, ts) + q_e / qs ) / qs
-rs = np.sort(get_rs(As, qs, ps)[:,1000:,0], axis=0)
-inds0 = np.where(np.count_nonzero(np.abs(qs[1000:,0]) > rs, axis=0) == 0)[0]
-inds2 = np.where(np.count_nonzero(np.abs(qs[1000:,0]) > rs, axis=0) == 2)[0]
+rs = np.sort(get_rs(As, qs, ps)[:,:,0], axis=0)
+inds = np.where(np.count_nonzero(np.abs(qs[:,0]) > rs, axis=0) != 1)[0]
 
-r_jumps0 = 0.5 * rs[0,inds0] + 0.5 * rs[1,inds0]
-r_jumps2 = 0.5 * rs[0,inds2] + 0.5 * rs[1,inds2]
-
+# Calculate steps
+r_jumps = 0.5 * rs[0,inds] + 0.5 * rs[1,inds]
 drs = np.zeros(len(qs))
-drs[inds0 + 1000] = r_jumps0 - np.abs(qs[inds0 + 1000,0])
-drs[inds2 + 1000] = r_jumps2 - np.abs(qs[inds2 + 1000,0])
-drs = convolve(drs, [1/20]*20, 'same')
-new_qs = qs[:,0] + drs * (qs / np.abs(qs))[:,0] * 1
-max_diff = np.max(np.abs(drs))
+drs[inds] = r_jumps - np.abs(qs[inds,0])
 
-new_q_traj = TrajFromPoints(s, np.expand_dims(new_qs, axis=0))
+# Convolve with a triangle window to make changes less localized, giving more weight to further times
+cutoff = 0.1
+window = np.arange(10.)
+window /= np.sum(window)
+max_diff = np.max(np.abs(drs))
+# drs = convolve(drs, window, 'same')
+
+if np.max(np.abs(drs)) > 0:
+    drs[np.abs(drs) > cutoff] *= cutoff / np.abs(drs)[np.abs(drs) > cutoff]
+
+# Calculate time trajectory from interpolated trajectory in position space
+new_qs = qs[:,0] + drs * (qs / np.abs(qs))[:,0]
+new_q_traj = StepTraj(step_sample, np.expand_dims(new_qs, axis=0))
 new_jump = Space2TimeTraj(t0=0, t1=1, q_traj=new_q_traj, V=V_field,
                       m=m, max_step=5e-5).init(ics)
-s = np.linspace(0,1,10000)
-ts = np.array([new_jump.t_0(_s) for _s in s])
-qs = np.array([new_jump.q_traj.t_0(_s) for _s in s])
-ps = np.array([new_jump.p(_s) for _s in s])
 
 #%% Plot step
+ts = np.array([new_jump.t_0(s) for s in plot_sample])
+qs = np.array([new_jump.q_traj.t_0(s) for s in plot_sample])
+ps = np.array([new_jump.p(s) for s in plot_sample])
 
 _, (q, p, tau) = plt.subplots(1, 3, figsize=(14,4))
-vals = q.scatter(qs.real, qs.imag, c=s, s=3, cmap='cool')
+vals = q.scatter(qs.real, qs.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=q)
 q.scatter(0, 0, c='r')
 q.set_title(r'$q$')
 q.set_xlabel(r'$\Re q$')
 q.set_ylabel(r'$\Im q$')
 
-vals = p.scatter(ps.real, ps.imag, c=s, s=3, cmap='cool')
+vals = p.scatter(ps.real, ps.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=p)
 p.set_title(r'$p$')
 p.set_xlabel(r'$\Re p$')
 p.set_ylabel(r'$\Im p$')
 
-vals = tau.scatter(ts.real, ts.imag, c=s, s=3, cmap='cool')
+vals = tau.scatter(ts.real, ts.imag, c=plot_sample, s=3, cmap='cool')
 plt.colorbar(vals, label='trajectory parameter', ax=tau)
 tau.set_title(r'$t$')
 tau.set_xlabel(r'$\Re t$')
